@@ -9,11 +9,9 @@
 namespace poko {
 
 JobSystem::JobSystem(std::size_t worker_count) {
-    const std::size_t hardware =
-        static_cast<std::size_t>(std::thread::hardware_concurrency());
+    const std::size_t hardware = static_cast<std::size_t>(std::thread::hardware_concurrency());
     const std::size_t count =
-        worker_count == 0 ? std::max<std::size_t>(std::size_t{2}, hardware)
-                          : worker_count;
+        worker_count == 0 ? std::max<std::size_t>(std::size_t{2}, hardware) : worker_count;
     workers_.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
         workers_.emplace_back([this] { worker_loop(); });
@@ -90,4 +88,4 @@ void JobSystem::worker_loop() {
     }
 }
 
-}  // namespace poko
+} // namespace poko

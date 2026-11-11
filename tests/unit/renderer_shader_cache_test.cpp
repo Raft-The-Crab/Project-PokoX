@@ -18,12 +18,9 @@ POKO_TEST(hash_is_deterministic_and_sensitive_to_inputs) {
     poko::ShaderDesc different_source = vertex;
     different_source.source = "void main() { int x = 1; }";
 
-    POKO_CHECK_EQ(poko::ShaderCache::hash(vertex),
-                  poko::ShaderCache::hash(vertex));
-    POKO_CHECK(poko::ShaderCache::hash(vertex) !=
-               poko::ShaderCache::hash(fragment));
-    POKO_CHECK(poko::ShaderCache::hash(vertex) !=
-               poko::ShaderCache::hash(different_source));
+    POKO_CHECK_EQ(poko::ShaderCache::hash(vertex), poko::ShaderCache::hash(vertex));
+    POKO_CHECK(poko::ShaderCache::hash(vertex) != poko::ShaderCache::hash(fragment));
+    POKO_CHECK(poko::ShaderCache::hash(vertex) != poko::ShaderCache::hash(different_source));
 }
 
 POKO_TEST(cache_compiles_once_and_then_hits) {

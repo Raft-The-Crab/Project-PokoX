@@ -85,13 +85,24 @@ on them.
 - **`Renderer`** — owns an injected `IRenderDevice`, wires the above together,
   and `render_frame()` clears, submits the batched draw list and ends the frame.
 
+## Backends
+
+- **`poko_render_null` [MOCK]** — `NullRenderDevice` records commands and
+  simulates device loss; used by all default builds and CI.
+- **`poko_render_gl` [PRODUCTION]** — `GlRenderDevice`, OpenGL 3.3 core.
+  Built only with `POKO_RENDER_OPENGL=ON` (requires
+  `POKO_FETCH_DEPENDENCIES=ON`). Renders to the current default framebuffer;
+  the window layer owns context creation and swaps. See `DEC-004`.
+- `IRenderDevice::update_buffer(handle, data, offset)` uploads raw bytes into
+  a buffer; backends reject out-of-range writes.
+
 ## What is NOT here
 
-Real SDL2 windowing, Vulkan/OpenGL/Diligent backends, compiled shader
-bytecode, texture upload, lighting/shading, GPU timing queries, and the Dear
-ImGui debug panel (`systemplan/09`). All require pinned dependencies; see
-`third_party/DEPENDENCIES.md` and `DEC-003`. Until then,
-`poko_windowed_demo` remains a labelled `STUB` and
+Vulkan/Diligent backends (dependencies still unpinned), uniforms/UBO and
+per-draw resource bindings, texture pixel upload, compiled shader bytecode,
+lighting/shading, GPU timing queries, and the Dear ImGui debug panel
+(`systemplan/09`). See `third_party/DEPENDENCIES.md`, `DEC-003` and `DEC-004`.
+In offline builds `poko_windowed_demo` remains a labelled `STUB`;
 `poko_render_demo` is the console test scene.
 
 ## Tests

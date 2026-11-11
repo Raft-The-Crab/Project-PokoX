@@ -20,12 +20,24 @@ class Renderer {
 public:
     explicit Renderer(std::unique_ptr<api::IRenderDevice> device);
 
-    api::IRenderDevice& device() noexcept { return *device_; }
-    const api::IRenderDevice& device() const noexcept { return *device_; }
-    ShaderCache& shaders() noexcept { return shaders_; }
-    Camera& camera() noexcept { return camera_; }
-    SceneSubmission& submission() noexcept { return submission_; }
-    FrameStats& stats() noexcept { return stats_; }
+    api::IRenderDevice& device() noexcept {
+        return *device_;
+    }
+    const api::IRenderDevice& device() const noexcept {
+        return *device_;
+    }
+    ShaderCache& shaders() noexcept {
+        return shaders_;
+    }
+    Camera& camera() noexcept {
+        return camera_;
+    }
+    SceneSubmission& submission() noexcept {
+        return submission_;
+    }
+    FrameStats& stats() noexcept {
+        return stats_;
+    }
 
     // Clears, submits the batched draw list, and ends the frame.
     Status render_frame(const ClearValue& clear);
@@ -40,4 +52,4 @@ private:
     FrameStats stats_;
 };
 
-}  // namespace poko
+} // namespace poko

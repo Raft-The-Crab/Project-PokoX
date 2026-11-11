@@ -25,7 +25,9 @@ public:
     std::uintmax_t file_size(std::string_view path) const override;
     std::string absolute(std::string_view path) const override;
 
-    const std::filesystem::path& root() const noexcept { return root_; }
+    const std::filesystem::path& root() const noexcept {
+        return root_;
+    }
 
 private:
     std::filesystem::path resolve(std::string_view path) const;
@@ -33,4 +35,4 @@ private:
     std::filesystem::path root_;
 };
 
-}  // namespace poko
+} // namespace poko

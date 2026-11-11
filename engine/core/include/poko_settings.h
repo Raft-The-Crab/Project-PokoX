@@ -49,7 +49,9 @@ public:
         return it->second;
     }
 
-    bool has(std::string_view key) const { return get(key).has_value(); }
+    bool has(std::string_view key) const {
+        return get(key).has_value();
+    }
 
     bool get_bool(std::string_view key, bool fallback) const {
         const auto raw = get(key);
@@ -156,4 +158,4 @@ private:
     std::map<std::string, std::string> values_;
 };
 
-}  // namespace poko
+} // namespace poko

@@ -11,8 +11,7 @@
 // Phase 1 (systemplan/04). This target is deliberately a labelled STUB and is
 // excluded from the headless Server configuration.
 int main() {
-    std::cout << "poko_windowed_demo " << poko::version_string() << " ["
-              << POKO_IMPL_LABEL << "]\n"
+    std::cout << "poko_windowed_demo " << poko::version_string() << " [" << POKO_IMPL_LABEL << "]\n"
               << "STUB: requires SDL2 windowing and a render device.\n"
               << "Tracked by systemplan/04 (renderer build sequence).\n";
     return 0;

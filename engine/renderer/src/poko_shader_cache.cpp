@@ -11,8 +11,7 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
 void mix(std::uint64_t& hash, std::string_view text) noexcept {
     for (const char character : text) {
-        hash ^= static_cast<std::uint64_t>(
-            static_cast<unsigned char>(character));
+        hash ^= static_cast<std::uint64_t>(static_cast<unsigned char>(character));
         hash *= kFnvPrime;
     }
 }
@@ -22,13 +21,13 @@ void mix_byte(std::uint64_t& hash, std::uint8_t value) noexcept {
     hash *= kFnvPrime;
 }
 
-}  // namespace
+} // namespace
 
 std::uint64_t ShaderCache::hash(const ShaderDesc& desc) noexcept {
     std::uint64_t value = kFnvOffsetBasis;
     mix_byte(value, static_cast<std::uint8_t>(desc.stage));
     mix(value, desc.entry_point);
-    mix_byte(value, 0);  // separator
+    mix_byte(value, 0); // separator
     mix(value, desc.source);
     return value;
 }
@@ -80,4 +79,4 @@ void ShaderCache::clear() {
     hits_ = 0;
 }
 
-}  // namespace poko
+} // namespace poko

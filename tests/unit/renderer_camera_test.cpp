@@ -13,8 +13,7 @@ POKO_TEST(perspective_projection_is_right_handed) {
     POKO_CHECK(projection.at(1, 1) > 0.0f);
     POKO_CHECK(projection.at(3, 2) < 0.0f);
 
-    const auto ndc = poko::math::transform(
-        projection, poko::math::Vec3{0.0f, 0.0f, -1.0f}, 1.0f);
+    const auto ndc = poko::math::transform(projection, poko::math::Vec3{0.0f, 0.0f, -1.0f}, 1.0f);
     POKO_CHECK(poko::math::nearly_equal(ndc.x, 0.0f));
     POKO_CHECK(poko::math::nearly_equal(ndc.y, 0.0f));
 }
@@ -35,8 +34,8 @@ POKO_TEST(view_matrix_translates_the_world) {
     camera.set_target(poko::math::Vec3{0.0f, 0.0f, 0.0f});
     camera.set_up(poko::math::Vec3{0.0f, 1.0f, 0.0f});
 
-    const auto point = poko::math::transform_point(
-        camera.view_matrix(), poko::math::Vec3{0.0f, 0.0f, 0.0f});
+    const auto point =
+        poko::math::transform_point(camera.view_matrix(), poko::math::Vec3{0.0f, 0.0f, 0.0f});
     POKO_CHECK(poko::math::nearly_equal(point.x, 0.0f));
     POKO_CHECK(poko::math::nearly_equal(point.y, 0.0f));
     POKO_CHECK(poko::math::nearly_equal(point.z, -5.0f, 1.0e-4f));

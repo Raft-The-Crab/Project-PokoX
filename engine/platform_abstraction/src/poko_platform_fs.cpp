@@ -17,7 +17,7 @@ bool contains_parent_component(const std::filesystem::path& path) {
     return false;
 }
 
-}  // namespace
+} // namespace
 
 LocalFileSystem::LocalFileSystem(std::filesystem::path root)
     : root_(std::filesystem::absolute(std::move(root)).lexically_normal()) {}
@@ -29,8 +29,7 @@ std::filesystem::path LocalFileSystem::resolve(std::string_view path) const {
     const std::filesystem::path relative{std::string(path)};
     // Reject root-relative, drive-relative and rooted paths: all of them can
     // make operator/ replace root_ instead of appending to it.
-    if (relative.is_absolute() || relative.has_root_name() ||
-        relative.has_root_directory()) {
+    if (relative.is_absolute() || relative.has_root_name() || relative.has_root_directory()) {
         throw std::invalid_argument("rooted paths are not permitted");
     }
     if (contains_parent_component(relative)) {
@@ -49,8 +48,7 @@ bool LocalFileSystem::read_file(std::string_view path, std::string& out) const {
     if (!stream) {
         return false;
     }
-    out.assign(std::istreambuf_iterator<char>(stream),
-               std::istreambuf_iterator<char>());
+    out.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
     return stream.good() || stream.eof();
 }
 
@@ -64,4 +62,4 @@ std::string LocalFileSystem::absolute(std::string_view path) const {
     return resolve(path).string();
 }
 
-}  // namespace poko
+} // namespace poko

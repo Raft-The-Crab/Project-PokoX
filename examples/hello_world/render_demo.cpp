@@ -52,8 +52,7 @@ int main() {
 
     renderer.shaders().get_or_compile(vertex_shader);
     renderer.shaders().get_or_compile(fragment_shader);
-    renderer.camera().set_perspective(poko::math::kHalfPi, 16.0f / 9.0f, 0.1f,
-                                      100.0f);
+    renderer.camera().set_perspective(poko::math::kHalfPi, 16.0f / 9.0f, 0.1f, 100.0f);
     renderer.camera().set_position(poko::math::Vec3{0.0f, 0.0f, 3.0f});
 
     poko::DrawCall call;
@@ -63,7 +62,7 @@ int main() {
     call.index_count = 6;
     call.sort_key = 1;
     renderer.submission().submit(call);
-    renderer.submission().submit(call);  // same batch -> one instanced draw
+    renderer.submission().submit(call); // same batch -> one instanced draw
     renderer.submission().batch();
 
     const poko::Status status = renderer.render_frame(poko::ClearValue{});
@@ -73,8 +72,8 @@ int main() {
     }
 
     std::cout << "renderer demo [" << renderer.device().name() << "] OK\n"
-              << "backend chain: " << poko::to_string(poko::preferred_backend())
-              << " -> " << poko::to_string(poko::fallback_backend()) << " -> "
+              << "backend chain: " << poko::to_string(poko::preferred_backend()) << " -> "
+              << poko::to_string(poko::fallback_backend()) << " -> "
               << poko::to_string(poko::last_resort_backend()) << '\n'
               << "shaders cached: " << renderer.shaders().size()
               << " draws: " << renderer.stats().draw_calls()

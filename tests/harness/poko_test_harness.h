@@ -42,12 +42,12 @@ inline void check(bool condition, const char* expression, const char* file, int 
 }
 
 template <typename A, typename B>
-void check_eq(const A& a, const B& b, const char* a_expr, const char* b_expr,
-              const char* file, int line) {
+void check_eq(const A& a, const B& b, const char* a_expr, const char* b_expr, const char* file,
+              int line) {
     if (!(a == b)) {
         std::ostringstream out;
-        out << "check failed: " << a_expr << " == " << b_expr << " (" << a
-            << " != " << b << ") at " << file << ':' << line;
+        out << "check failed: " << a_expr << " == " << b_expr << " (" << a << " != " << b << ") at "
+            << file << ':' << line;
         throw CheckFailure(out.str());
     }
 }
@@ -72,34 +72,33 @@ inline int run_all() {
     return failed == 0 ? 0 : 1;
 }
 
-}  // namespace poko::test
+} // namespace poko::test
 
-#define POKO_TEST(name)                                                        \
-    static void poko_test_##name();                                            \
-    [[maybe_unused]] static const bool poko_registered_##name =                \
-        ::poko::test::register_test(#name, &poko_test_##name);                 \
+#define POKO_TEST(name)                                                                            \
+    static void poko_test_##name();                                                                \
+    [[maybe_unused]] static const bool poko_registered_##name =                                    \
+        ::poko::test::register_test(#name, &poko_test_##name);                                     \
     static void poko_test_##name()
 
-#define POKO_TEST_MAIN()                                                       \
-    int main() { return ::poko::test::run_all(); }
+#define POKO_TEST_MAIN()                                                                           \
+    int main() {                                                                                   \
+        return ::poko::test::run_all();                                                            \
+    }
 
-#define POKO_CHECK(expression)                                                 \
-    ::poko::test::check(static_cast<bool>(expression), #expression, __FILE__, \
-                        __LINE__)
+#define POKO_CHECK(expression)                                                                     \
+    ::poko::test::check(static_cast<bool>(expression), #expression, __FILE__, __LINE__)
 
-#define POKO_CHECK_EQ(a, b) \
-    ::poko::test::check_eq((a), (b), #a, #b, __FILE__, __LINE__)
+#define POKO_CHECK_EQ(a, b) ::poko::test::check_eq((a), (b), #a, #b, __FILE__, __LINE__)
 
-#define POKO_CHECK_THROWS(expression, exception_type)                          \
-    do {                                                                       \
-        bool _poko_threw = false;                                              \
-        try {                                                                  \
-            (void)(expression);                                                \
-        } catch (const exception_type&) {                                      \
-            _poko_threw = true;                                                \
-        } catch (...) {                                                        \
-        }                                                                      \
-        ::poko::test::check(_poko_threw,                                       \
-                            #expression " throws " #exception_type, __FILE__,  \
-                            __LINE__);                                         \
+#define POKO_CHECK_THROWS(expression, exception_type)                                              \
+    do {                                                                                           \
+        bool _poko_threw = false;                                                                  \
+        try {                                                                                      \
+            (void)(expression);                                                                    \
+        } catch (const exception_type&) {                                                          \
+            _poko_threw = true;                                                                    \
+        } catch (...) {                                                                            \
+        }                                                                                          \
+        ::poko::test::check(_poko_threw, #expression " throws " #exception_type, __FILE__,         \
+                            __LINE__);                                                             \
     } while (false)

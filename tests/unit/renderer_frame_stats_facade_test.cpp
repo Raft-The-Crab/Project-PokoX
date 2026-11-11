@@ -36,7 +36,7 @@ poko::PipelineDesc make_pipeline(poko::RenderHandle vs, poko::RenderHandle fs) {
     pipeline.layout.attributes[0] = {0, 3, 12, 0};
     return pipeline;
 }
-}  // namespace
+} // namespace
 
 POKO_TEST(renderer_renders_a_batched_frame) {
     auto device = std::make_unique<poko::NullRenderDevice>();
@@ -47,8 +47,7 @@ POKO_TEST(renderer_renders_a_batched_frame) {
     const auto vs = renderer.device().create_shader(shader);
     const auto fs = renderer.device().create_shader(shader);
     POKO_CHECK(vs.ok() && fs.ok());
-    const auto pipe =
-        renderer.device().create_pipeline(make_pipeline(vs.value(), fs.value()));
+    const auto pipe = renderer.device().create_pipeline(make_pipeline(vs.value(), fs.value()));
     POKO_CHECK(pipe.ok());
 
     poko::DrawCall call;
@@ -61,8 +60,7 @@ POKO_TEST(renderer_renders_a_batched_frame) {
     POKO_CHECK(renderer.render_frame(poko::ClearValue{}).ok());
     POKO_CHECK_EQ(renderer.stats().draw_calls(), std::uint32_t{1});
     POKO_CHECK_EQ(renderer.stats().triangles(), std::uint64_t{4});
-    POKO_CHECK(renderer.device().capabilities().backend ==
-               poko::GraphicsBackend::Null);
+    POKO_CHECK(renderer.device().capabilities().backend == poko::GraphicsBackend::Null);
 }
 
 POKO_TEST(renderer_reports_an_unavailable_device) {

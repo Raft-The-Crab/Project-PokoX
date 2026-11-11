@@ -24,8 +24,12 @@ inline constexpr float kEpsilon = 1.0e-5f;
 inline constexpr float kDegToRad = kPi / 180.0f;
 inline constexpr float kRadToDeg = 180.0f / kPi;
 
-constexpr float to_radians(float degrees) noexcept { return degrees * kDegToRad; }
-constexpr float to_degrees(float radians) noexcept { return radians * kRadToDeg; }
+constexpr float to_radians(float degrees) noexcept {
+    return degrees * kDegToRad;
+}
+constexpr float to_degrees(float radians) noexcept {
+    return radians * kRadToDeg;
+}
 
 constexpr bool nearly_equal(float a, float b, float epsilon = kEpsilon) noexcept {
     const float difference = a > b ? a - b : b - a;
@@ -78,22 +82,31 @@ constexpr Vec3 operator-(const Vec3& a, const Vec3& b) noexcept {
 constexpr Vec3 operator*(const Vec3& v, float scalar) noexcept {
     return {v.x * scalar, v.y * scalar, v.z * scalar};
 }
-constexpr Vec3 operator*(float scalar, const Vec3& v) noexcept { return v * scalar; }
+constexpr Vec3 operator*(float scalar, const Vec3& v) noexcept {
+    return v * scalar;
+}
 constexpr Vec3 operator/(const Vec3& v, float scalar) noexcept {
     return {v.x / scalar, v.y / scalar, v.z / scalar};
 }
-constexpr Vec3 operator-(const Vec3& v) noexcept { return {-v.x, -v.y, -v.z}; }
+constexpr Vec3 operator-(const Vec3& v) noexcept {
+    return {-v.x, -v.y, -v.z};
+}
 
 constexpr float dot(const Vec3& a, const Vec3& b) noexcept {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 constexpr Vec3 cross(const Vec3& a, const Vec3& b) noexcept {
-    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
-            a.x * b.y - a.y * b.x};
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
-inline float length(const Vec3& v) noexcept { return std::sqrt(dot(v, v)); }
-constexpr float length_squared(const Vec3& v) noexcept { return dot(v, v); }
-inline float distance(const Vec3& a, const Vec3& b) noexcept { return length(a - b); }
+inline float length(const Vec3& v) noexcept {
+    return std::sqrt(dot(v, v));
+}
+constexpr float length_squared(const Vec3& v) noexcept {
+    return dot(v, v);
+}
+inline float distance(const Vec3& a, const Vec3& b) noexcept {
+    return length(a - b);
+}
 inline Vec3 normalize(const Vec3& v) noexcept {
     const float len = length(v);
     return len > 0.0f ? v / len : Vec3{};
@@ -188,12 +201,9 @@ inline Mat4 multiply(const Mat4& a, const Mat4& b) noexcept {
 // w = 1 for points (translation applies), w = 0 for directions.
 inline Vec3 transform(const Mat4& matrix, const Vec3& v, float w) noexcept {
     return {
-        matrix.at(0, 0) * v.x + matrix.at(0, 1) * v.y + matrix.at(0, 2) * v.z +
-            matrix.at(0, 3) * w,
-        matrix.at(1, 0) * v.x + matrix.at(1, 1) * v.y + matrix.at(1, 2) * v.z +
-            matrix.at(1, 3) * w,
-        matrix.at(2, 0) * v.x + matrix.at(2, 1) * v.y + matrix.at(2, 2) * v.z +
-            matrix.at(2, 3) * w,
+        matrix.at(0, 0) * v.x + matrix.at(0, 1) * v.y + matrix.at(0, 2) * v.z + matrix.at(0, 3) * w,
+        matrix.at(1, 0) * v.x + matrix.at(1, 1) * v.y + matrix.at(1, 2) * v.z + matrix.at(1, 3) * w,
+        matrix.at(2, 0) * v.x + matrix.at(2, 1) * v.y + matrix.at(2, 2) * v.z + matrix.at(2, 3) * w,
     };
 }
 inline Vec3 transform_point(const Mat4& matrix, const Vec3& v) noexcept {
@@ -210,12 +220,13 @@ struct Quat {
     float w = 1.0f;
 };
 
-inline Quat quat_identity() noexcept { return Quat{}; }
+inline Quat quat_identity() noexcept {
+    return Quat{};
+}
 
 inline Quat normalize(const Quat& q) noexcept {
     const float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-    return len > 0.0f ? Quat{q.x / len, q.y / len, q.z / len, q.w / len}
-                      : quat_identity();
+    return len > 0.0f ? Quat{q.x / len, q.y / len, q.z / len, q.w / len} : quat_identity();
 }
 
 inline Quat conjugate(const Quat& q) noexcept {
@@ -243,8 +254,7 @@ inline Vec3 rotate(const Quat& rotation, const Vec3& v) noexcept {
     const Quat q = normalize(rotation);
     const Vec3 u{q.x, q.y, q.z};
     const float s = q.w;
-    return v * (2.0f * s * s - 1.0f) + u * (2.0f * dot(u, v)) +
-           cross(u, v) * (2.0f * s);
+    return v * (2.0f * s * s - 1.0f) + u * (2.0f * dot(u, v)) + cross(u, v) * (2.0f * s);
 }
 
-}  // namespace poko::math
+} // namespace poko::math

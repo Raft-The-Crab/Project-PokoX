@@ -8,4 +8,4 @@ namespace poko::cli {
 // so a STUB can never be mistaken for a production tool (systemplan/00).
 int run_stub(std::string_view tool, std::string_view purpose, int argc, char** argv);
 
-}  // namespace poko::cli
+} // namespace poko::cli

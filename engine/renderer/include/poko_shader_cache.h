@@ -42,4 +42,4 @@ private:
     std::size_t hits_ = 0;
 };
 
-}  // namespace poko
+} // namespace poko

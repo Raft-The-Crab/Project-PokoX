@@ -14,14 +14,13 @@ int main(int argc, char** argv) {
     if (argc > 1) {
         const std::string_view arg(argv[1]);
         if (arg == "--version") {
-            std::cout << "poko-server " << poko::version_string() << " ["
-                      << POKO_IMPL_LABEL << "]\n";
+            std::cout << "poko-server " << poko::version_string() << " [" << POKO_IMPL_LABEL
+                      << "]\n";
             return 0;
         }
     }
 
-    std::cout << "poko-server " << poko::version_string() << " ["
-              << POKO_IMPL_LABEL << "]\n"
+    std::cout << "poko-server " << poko::version_string() << " [" << POKO_IMPL_LABEL << "]\n"
               << "STUB: shared headless dedicated server runtime "
                  "(systemplan/18).\n"
               << "Phase 6 adds .pkxx loading, registration, tickets and "

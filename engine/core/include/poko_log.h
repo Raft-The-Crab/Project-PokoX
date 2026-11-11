@@ -58,25 +58,24 @@ private:
 const char* to_string(LogLevel level) noexcept;
 void log(LogLevel level, std::string_view category, std::string message);
 
-}  // namespace poko
+} // namespace poko
 
-#define POKO_LOG_STREAM(level_value, category_value, expression)               \
-    do {                                                                       \
-        if (::poko::Logger::instance().is_enabled(level_value)) {              \
-            std::ostringstream _poko_stream;                                    \
-            _poko_stream << expression;                                         \
-            ::poko::Logger::instance().log(level_value, category_value,         \
-                                           _poko_stream.str());                 \
-        }                                                                      \
+#define POKO_LOG_STREAM(level_value, category_value, expression)                                   \
+    do {                                                                                           \
+        if (::poko::Logger::instance().is_enabled(level_value)) {                                  \
+            std::ostringstream _poko_stream;                                                       \
+            _poko_stream << expression;                                                            \
+            ::poko::Logger::instance().log(level_value, category_value, _poko_stream.str());       \
+        }                                                                                          \
     } while (false)
 
-#define POKO_LOG_TRACE(category_value, expression) \
+#define POKO_LOG_TRACE(category_value, expression)                                                 \
     POKO_LOG_STREAM(::poko::LogLevel::Trace, category_value, expression)
-#define POKO_LOG_DEBUG(category_value, expression) \
+#define POKO_LOG_DEBUG(category_value, expression)                                                 \
     POKO_LOG_STREAM(::poko::LogLevel::Debug, category_value, expression)
-#define POKO_LOG_INFO(category_value, expression) \
+#define POKO_LOG_INFO(category_value, expression)                                                  \
     POKO_LOG_STREAM(::poko::LogLevel::Info, category_value, expression)
-#define POKO_LOG_WARN(category_value, expression) \
+#define POKO_LOG_WARN(category_value, expression)                                                  \
     POKO_LOG_STREAM(::poko::LogLevel::Warn, category_value, expression)
-#define POKO_LOG_ERROR(category_value, expression) \
+#define POKO_LOG_ERROR(category_value, expression)                                                 \
     POKO_LOG_STREAM(::poko::LogLevel::Error, category_value, expression)

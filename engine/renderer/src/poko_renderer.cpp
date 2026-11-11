@@ -4,19 +4,16 @@
 
 namespace poko {
 
-Renderer::Renderer(std::unique_ptr<api::IRenderDevice> device)
-    : device_(std::move(device)) {}
+Renderer::Renderer(std::unique_ptr<api::IRenderDevice> device) : device_(std::move(device)) {}
 
 std::uint32_t Renderer::triangle_count(const DrawCall& call) noexcept {
-    const std::uint32_t indices =
-        call.index_count > 0 ? call.index_count : call.vertex_count;
+    const std::uint32_t indices = call.index_count > 0 ? call.index_count : call.vertex_count;
     return (indices / 3U) * call.instance_count;
 }
 
 Status Renderer::render_frame(const ClearValue& clear) {
     if (!device_ || !device_->available()) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "render device is unavailable");
+        return Status::fail(ErrorCode::FailedPrecondition, "render device is unavailable");
     }
 
     stats_.begin_frame();
@@ -45,4 +42,4 @@ Status Renderer::render_frame(const ClearValue& clear) {
     return status;
 }
 
-}  // namespace poko
+} // namespace poko

@@ -8,8 +8,10 @@
 // may pull graphics, backend or UI vendor dependencies into engine core; the
 // render contracts below are POD-only descriptors.
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -53,6 +55,11 @@ public:
     virtual Result<RenderHandle> create_shader(const ShaderDesc& desc) = 0;
     virtual Result<RenderHandle> create_pipeline(const PipelineDesc& desc) = 0;
     virtual Status destroy(RenderHandle handle) = 0;
+
+    // Uploads raw bytes into a buffer created with create_buffer(). Backends
+    // must reject writes past the buffer's declared size.
+    virtual Status update_buffer(RenderHandle handle, std::span<const std::byte> data,
+                                 std::uint64_t offset_bytes = 0) = 0;
 
     virtual Status begin_frame() = 0;
     virtual Status clear(const ClearValue& value) = 0;
@@ -117,4 +124,4 @@ public:
     virtual ~IServerRegistry() = default;
 };
 
-}  // namespace poko::api
+} // namespace poko::api

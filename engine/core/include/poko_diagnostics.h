@@ -70,8 +70,8 @@ public:
             : diagnostics_(diagnostics), name_(name), start_(Clock::now()) {}
 
         ~ScopedTimer() {
-            diagnostics_.record_time(
-                name_, std::chrono::duration<double>(Clock::now() - start_).count());
+            diagnostics_.record_time(name_,
+                                     std::chrono::duration<double>(Clock::now() - start_).count());
         }
 
         ScopedTimer(const ScopedTimer&) = delete;
@@ -91,4 +91,4 @@ private:
     std::unordered_map<std::string, double> timings_;
 };
 
-}  // namespace poko
+} // namespace poko

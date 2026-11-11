@@ -21,12 +21,22 @@ public:
     ObserverPtr() = default;
     explicit ObserverPtr(T* pointer) noexcept : pointer_(pointer) {}
 
-    T* get() const noexcept { return pointer_; }
-    T& operator*() const { return *pointer_; }
-    T* operator->() const noexcept { return pointer_; }
-    explicit operator bool() const noexcept { return pointer_ != nullptr; }
+    T* get() const noexcept {
+        return pointer_;
+    }
+    T& operator*() const {
+        return *pointer_;
+    }
+    T* operator->() const noexcept {
+        return pointer_;
+    }
+    explicit operator bool() const noexcept {
+        return pointer_ != nullptr;
+    }
 
-    void reset(T* pointer = nullptr) noexcept { pointer_ = pointer; }
+    void reset(T* pointer = nullptr) noexcept {
+        pointer_ = pointer;
+    }
 
 private:
     T* pointer_ = nullptr;
@@ -44,7 +54,9 @@ public:
         }
     }
 
-    void release() noexcept { action_ = {}; }
+    void release() noexcept {
+        action_ = {};
+    }
 
     ScopeExit(const ScopeExit&) = delete;
     ScopeExit& operator=(const ScopeExit&) = delete;
@@ -113,10 +125,8 @@ public:
 
 private:
     bool handle_is_live(const TypedHandle& handle) const noexcept {
-        return is_valid(handle) &&
-               static_cast<std::size_t>(handle.index) < slots_.size() &&
-               generations_[handle.index] == handle.generation &&
-               slots_[handle.index] != nullptr;
+        return is_valid(handle) && static_cast<std::size_t>(handle.index) < slots_.size() &&
+               generations_[handle.index] == handle.generation && slots_[handle.index] != nullptr;
     }
 
     mutable std::mutex mutex_;
@@ -125,4 +135,4 @@ private:
     std::vector<HandleIndex> free_;
 };
 
-}  // namespace poko
+} // namespace poko

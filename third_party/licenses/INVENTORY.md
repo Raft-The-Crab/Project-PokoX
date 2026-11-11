@@ -1,7 +1,7 @@
 # Third-party licence inventory
 
 **Revision:** 2026-11-12
-**Status:** Phase 0 — no third-party code is vendored. All rows are planned.
+**Status:** SDL3 and gl3w are pinned (DEC-004). All other rows are planned.
 
 `systemplan/02` requires a licence inventory; rule 11 of `systemplan/30`
 requires preserving third-party licences and notices. The software bill of
@@ -9,9 +9,9 @@ materials is tracked in `security/sbom/` once dependencies are pinned.
 
 | Component | Planned licence | Notice text present? | Verification | Status |
 |---|---|---|---|---|
-| SDL2 | zlib (unverified) | no | required | NOT VENDORED |
+| SDL3 | zlib — verified against `release-3.4.20` (`f00dc91`) | yes — `SDL3-LICENSE.txt` | done 2026-11-12 | PINNED (fetched only when `POKO_FETCH_DEPENDENCIES=ON`) |
+| gl3w | The Unlicense (public domain) — verified at `372e391` | yes — `gl3w-UNLICENSE.txt` | done 2026-11-12 | VENDORED (`third_party/vendored/gl3w/`) |
 | Vulkan headers / loader | Apache-2.0 / MIT (unverified) | no | required | NOT VENDORED |
-| OpenGL loader | unverified | no | required | NOT VENDORED |
 | Diligent Engine | Apache-2.0 (unverified) | no | required | NOT VENDORED |
 | GLM | MIT (unverified) | no | required | NOT VENDORED |
 | miniaudio | public domain / MIT (unverified) | no | required | NOT VENDORED |

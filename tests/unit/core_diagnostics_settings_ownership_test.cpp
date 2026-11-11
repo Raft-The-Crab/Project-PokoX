@@ -35,16 +35,14 @@ POKO_TEST(diagnostics_counters_gauges_and_timers) {
 }
 
 POKO_TEST(settings_parse_and_serialize_roundtrip) {
-    auto settings = poko::Settings::parse(
-        "# a comment\n"
-        "graphics.quality = high\n"
-        "\n"
-        "frame.cap=60\n"
-        "invalid_line\n"
-        "vsync = on\n");
+    auto settings = poko::Settings::parse("# a comment\n"
+                                          "graphics.quality = high\n"
+                                          "\n"
+                                          "frame.cap=60\n"
+                                          "invalid_line\n"
+                                          "vsync = on\n");
     POKO_CHECK_EQ(settings.size(), std::size_t{3});
-    POKO_CHECK_EQ(settings.get("graphics.quality").value_or(""),
-                  std::string("high"));
+    POKO_CHECK_EQ(settings.get("graphics.quality").value_or(""), std::string("high"));
     POKO_CHECK_EQ(settings.get_int("frame.cap", 0), std::int64_t{60});
     POKO_CHECK_EQ(settings.get_int("graphics.quality", -1), std::int64_t{-1});
     POKO_CHECK(settings.get_bool("vsync", false));

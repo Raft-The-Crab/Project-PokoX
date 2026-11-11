@@ -8,13 +8,12 @@ namespace poko {
 namespace {
 
 std::int64_t now_us() noexcept {
-    return static_cast<std::int64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count());
+    return static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                         std::chrono::system_clock::now().time_since_epoch())
+                                         .count());
 }
 
-}  // namespace
+} // namespace
 
 Logger& Logger::instance() {
     static Logger logger;
@@ -56,25 +55,25 @@ void Logger::log(LogLevel level, std::string_view category, std::string message)
     if (sink) {
         sink(record);
     } else {
-        std::clog << '[' << to_string(record.level) << "] [" << record.category
-                  << "] " << record.message << '\n';
+        std::clog << '[' << to_string(record.level) << "] [" << record.category << "] "
+                  << record.message << '\n';
     }
 }
 
 const char* to_string(LogLevel level) noexcept {
     switch (level) {
-        case LogLevel::Trace:
-            return "trace";
-        case LogLevel::Debug:
-            return "debug";
-        case LogLevel::Info:
-            return "info";
-        case LogLevel::Warn:
-            return "warn";
-        case LogLevel::Error:
-            return "error";
-        case LogLevel::Fatal:
-            return "fatal";
+    case LogLevel::Trace:
+        return "trace";
+    case LogLevel::Debug:
+        return "debug";
+    case LogLevel::Info:
+        return "info";
+    case LogLevel::Warn:
+        return "warn";
+    case LogLevel::Error:
+        return "error";
+    case LogLevel::Fatal:
+        return "fatal";
     }
     return "unknown";
 }
@@ -83,4 +82,4 @@ void log(LogLevel level, std::string_view category, std::string message) {
     Logger::instance().log(level, category, std::move(message));
 }
 
-}  // namespace poko
+} // namespace poko

@@ -72,4 +72,4 @@ private:
     std::vector<std::pair<SubscriptionId, Handler>> handlers_;
 };
 
-}  // namespace poko
+} // namespace poko

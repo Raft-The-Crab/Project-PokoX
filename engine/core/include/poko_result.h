@@ -26,28 +26,28 @@ enum class ErrorCode : std::uint8_t {
 
 inline constexpr const char* to_string(ErrorCode code) noexcept {
     switch (code) {
-        case ErrorCode::None:
-            return "none";
-        case ErrorCode::InvalidArgument:
-            return "invalid_argument";
-        case ErrorCode::NotFound:
-            return "not_found";
-        case ErrorCode::OutOfRange:
-            return "out_of_range";
-        case ErrorCode::AlreadyExists:
-            return "already_exists";
-        case ErrorCode::PermissionDenied:
-            return "permission_denied";
-        case ErrorCode::ResourceExhausted:
-            return "resource_exhausted";
-        case ErrorCode::Unsupported:
-            return "unsupported";
-        case ErrorCode::FailedPrecondition:
-            return "failed_precondition";
-        case ErrorCode::Internal:
-            return "internal";
-        case ErrorCode::Unimplemented:
-            return "unimplemented";
+    case ErrorCode::None:
+        return "none";
+    case ErrorCode::InvalidArgument:
+        return "invalid_argument";
+    case ErrorCode::NotFound:
+        return "not_found";
+    case ErrorCode::OutOfRange:
+        return "out_of_range";
+    case ErrorCode::AlreadyExists:
+        return "already_exists";
+    case ErrorCode::PermissionDenied:
+        return "permission_denied";
+    case ErrorCode::ResourceExhausted:
+        return "resource_exhausted";
+    case ErrorCode::Unsupported:
+        return "unsupported";
+    case ErrorCode::FailedPrecondition:
+        return "failed_precondition";
+    case ErrorCode::Internal:
+        return "internal";
+    case ErrorCode::Unimplemented:
+        return "unimplemented";
     }
     return "unknown";
 }
@@ -59,18 +59,26 @@ struct Error {
 
 class Status {
 public:
-    static Status success() { return Status{}; }
+    static Status success() {
+        return Status{};
+    }
 
     static Status fail(ErrorCode code, std::string message) {
         return Status{Error{code, std::move(message)}};
     }
 
-    bool ok() const noexcept { return !error_.has_value(); }
-    explicit operator bool() const noexcept { return ok(); }
+    bool ok() const noexcept {
+        return !error_.has_value();
+    }
+    explicit operator bool() const noexcept {
+        return ok();
+    }
     ErrorCode code() const noexcept {
         return error_ ? error_->code : ErrorCode::None;
     }
-    const Error& error() const { return *error_; }
+    const Error& error() const {
+        return *error_;
+    }
 
 private:
     Status() = default;
@@ -82,17 +90,29 @@ private:
 template <typename T>
 class Result {
 public:
-    static Result success(T value) { return Result{std::move(value)}; }
+    static Result success(T value) {
+        return Result{std::move(value)};
+    }
 
     static Result fail(ErrorCode code, std::string message) {
         return Result{Error{code, std::move(message)}};
     }
 
-    bool has_value() const noexcept { return std::holds_alternative<T>(value_); }
-    bool ok() const noexcept { return has_value(); }
-    explicit operator bool() const noexcept { return has_value(); }
-    const T& value() const { return std::get<T>(value_); }
-    const Error& error() const { return std::get<Error>(value_); }
+    bool has_value() const noexcept {
+        return std::holds_alternative<T>(value_);
+    }
+    bool ok() const noexcept {
+        return has_value();
+    }
+    explicit operator bool() const noexcept {
+        return has_value();
+    }
+    const T& value() const {
+        return std::get<T>(value_);
+    }
+    const Error& error() const {
+        return std::get<Error>(value_);
+    }
 
 private:
     explicit Result(T value) : value_(std::move(value)) {}
@@ -101,4 +121,4 @@ private:
     std::variant<T, Error> value_;
 };
 
-}  // namespace poko
+} // namespace poko

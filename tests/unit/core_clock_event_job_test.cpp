@@ -39,7 +39,7 @@ namespace {
 struct TestEvent {
     int value;
 };
-}  // namespace
+} // namespace
 
 POKO_TEST(event_bus_dispatches_and_unsubscribes) {
     poko::EventBus<TestEvent> bus;

@@ -18,13 +18,19 @@ class SceneSubmission {
 public:
     void submit(const DrawCall& call);
     void clear() noexcept;
-    std::size_t size() const noexcept { return draws_.size(); }
+    std::size_t size() const noexcept {
+        return draws_.size();
+    }
 
     // Stable sort + merge. Idempotent.
     void batch();
 
-    const std::vector<DrawCall>& draws() const noexcept { return draws_; }
-    std::size_t batch_count() const noexcept { return batches_; }
+    const std::vector<DrawCall>& draws() const noexcept {
+        return draws_;
+    }
+    std::size_t batch_count() const noexcept {
+        return batches_;
+    }
     std::uint64_t total_triangles() const;
 
 private:
@@ -34,4 +40,4 @@ private:
     std::size_t batches_ = 0;
 };
 
-}  // namespace poko
+} // namespace poko

@@ -13,7 +13,7 @@ poko::DrawCall make_call(std::uint32_t pipeline_index, std::uint32_t sort_key) {
     call.sort_key = sort_key;
     return call;
 }
-}  // namespace
+} // namespace
 
 POKO_TEST(invalid_draws_are_ignored) {
     poko::SceneSubmission submission;

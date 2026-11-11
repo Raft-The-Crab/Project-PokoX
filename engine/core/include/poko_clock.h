@@ -13,13 +13,17 @@ public:
 
     Stopwatch() : start_(Clock::now()) {}
 
-    void restart() noexcept { start_ = Clock::now(); }
+    void restart() noexcept {
+        start_ = Clock::now();
+    }
 
     double elapsed_seconds() const noexcept {
         return std::chrono::duration<double>(Clock::now() - start_).count();
     }
 
-    double elapsed_milliseconds() const noexcept { return elapsed_seconds() * 1000.0; }
+    double elapsed_milliseconds() const noexcept {
+        return elapsed_seconds() * 1000.0;
+    }
 
 private:
     Clock::time_point start_;
@@ -63,13 +67,23 @@ public:
     }
 
     // Fraction of a step not yet simulated, for interpolation [0, 1).
-    double interpolation_alpha() const noexcept { return accumulator_ / step_; }
+    double interpolation_alpha() const noexcept {
+        return accumulator_ / step_;
+    }
 
-    double step_seconds() const noexcept { return step_; }
-    std::size_t max_steps() const noexcept { return max_steps_; }
-    double accumulator() const noexcept { return accumulator_; }
+    double step_seconds() const noexcept {
+        return step_;
+    }
+    std::size_t max_steps() const noexcept {
+        return max_steps_;
+    }
+    double accumulator() const noexcept {
+        return accumulator_;
+    }
 
-    void reset() noexcept { accumulator_ = 0.0; }
+    void reset() noexcept {
+        accumulator_ = 0.0;
+    }
 
 private:
     double step_;
@@ -77,4 +91,4 @@ private:
     double accumulator_ = 0.0;
 };
 
-}  // namespace poko
+} // namespace poko

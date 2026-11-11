@@ -5,14 +5,10 @@
 #include "poko_render_contracts.h"
 
 POKO_TEST(backend_names_are_stable) {
-    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::Vulkan),
-                           "vulkan") == 0);
-    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::OpenGL),
-                           "opengl") == 0);
-    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::Null),
-                           "null") == 0);
-    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::Unknown),
-                           "unknown") == 0);
+    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::Vulkan), "vulkan") == 0);
+    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::OpenGL), "opengl") == 0);
+    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::Null), "null") == 0);
+    POKO_CHECK(std::strcmp(poko::to_string(poko::GraphicsBackend::Unknown), "unknown") == 0);
 }
 
 POKO_TEST(descriptors_validate_at_the_boundary) {

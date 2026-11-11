@@ -43,16 +43,19 @@ jobs:
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
 
   lint:
-    # Advisory in Phase 0: the clang toolchain is not pinned yet. Make this
-    # job blocking once versions are recorded in third_party/DEPENDENCIES.md.
-    name: Formatting and static analysis (advisory)
+    # Blocking since DEC-004: clang-format 23.1.5 and clang-tidy 23.1.4 are
+    # pinned PyPI wheels (see third_party/DEPENDENCIES.md).
+    name: Formatting and static analysis
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install clang tooling
-        run: sudo apt-get update && sudo apt-get install -y clang-format clang-tidy ninja-build
+      - name: Install pinned clang tooling
+        run: |
+          python3 -m venv /tmp/lintenv
+          /tmp/lintenv/bin/pip install --quiet \
+            clang-format==23.1.5 clang-tidy==23.1.4
+          echo "/tmp/lintenv/bin" >> "$GITHUB_PATH"
 
       - name: Check formatting
         shell: bash

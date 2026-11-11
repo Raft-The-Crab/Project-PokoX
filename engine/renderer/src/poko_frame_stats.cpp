@@ -32,12 +32,10 @@ void FrameStats::reset() noexcept {
 
 #if defined(POKO_DEV_TOOLS)
 void FrameStats::dump_to_log() const {
-    POKO_LOG_DEBUG("renderer", "frame=" << frame_index_
-                                        << " draws=" << draw_calls_
-                                        << " triangles=" << triangles_
-                                        << " cpu_ms=" << cpu_ms_
+    POKO_LOG_DEBUG("renderer", "frame=" << frame_index_ << " draws=" << draw_calls_
+                                        << " triangles=" << triangles_ << " cpu_ms=" << cpu_ms_
                                         << " gpu_ms=" << gpu_ms_);
 }
 #endif
 
-}  // namespace poko
+} // namespace poko

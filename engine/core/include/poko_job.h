@@ -38,7 +38,9 @@ public:
     void submit(Job job) override;
     void wait_idle() override;
 
-    std::size_t worker_count() const noexcept { return workers_.size(); }
+    std::size_t worker_count() const noexcept {
+        return workers_.size();
+    }
     std::size_t pending() const;
     std::size_t completed() const noexcept {
         return completed_.load(std::memory_order_relaxed);
@@ -57,4 +59,4 @@ private:
     std::atomic<std::size_t> completed_{0};
 };
 
-}  // namespace poko
+} // namespace poko

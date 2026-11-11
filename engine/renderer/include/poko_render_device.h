@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <span>
 #include <vector>
 
 #include "poko_api_seams.h"
@@ -37,6 +38,8 @@ public:
     Result<RenderHandle> create_shader(const ShaderDesc& desc) override;
     Result<RenderHandle> create_pipeline(const PipelineDesc& desc) override;
     Status destroy(RenderHandle handle) override;
+    Status update_buffer(RenderHandle handle, std::span<const std::byte> data,
+                         std::uint64_t offset_bytes = 0) override;
 
     Status begin_frame() override;
     Status clear(const ClearValue& value) override;
@@ -51,6 +54,7 @@ public:
     void simulate_device_loss() noexcept;
     std::size_t resource_count() const;
     std::size_t frame_count() const;
+    std::size_t buffer_update_count() const;
     std::vector<ClearValue> recorded_clears() const;
     std::vector<DrawCall> recorded_draws() const;
     void reset_records();
@@ -60,13 +64,14 @@ private:
     struct Resource {
         ResourceKind kind = ResourceKind::Buffer;
         bool alive = false;
+        std::uint64_t size_bytes = 0;
     };
 
-    Result<RenderHandle> create(ResourceKind kind);
+    Result<RenderHandle> create(ResourceKind kind, std::uint64_t size_bytes = 0);
     // Caller must hold mutex_.
-    Result<RenderHandle> create_unlocked(ResourceKind kind);
-    Status require_frame() const;  // caller must hold mutex_
-    bool handle_live(RenderHandle handle) const noexcept;  // caller must hold mutex_
+    Result<RenderHandle> create_unlocked(ResourceKind kind, std::uint64_t size_bytes = 0);
+    Status require_frame() const;                         // caller must hold mutex_
+    bool handle_live(RenderHandle handle) const noexcept; // caller must hold mutex_
 
     mutable std::mutex mutex_;
     DeviceCapabilities capabilities_;
@@ -75,6 +80,7 @@ private:
     std::vector<HandleIndex> free_;
     std::vector<ClearValue> clears_;
     std::vector<DrawCall> draws_;
+    std::size_t buffer_updates_ = 0;
     std::size_t frame_count_ = 0;
     bool in_frame_ = false;
     std::atomic<bool> device_lost_{false};
@@ -88,4 +94,4 @@ GraphicsBackend fallback_backend() noexcept;
 GraphicsBackend last_resort_backend() noexcept;
 DeviceCapabilities null_device_capabilities() noexcept;
 
-}  // namespace poko
+} // namespace poko

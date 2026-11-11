@@ -20,19 +20,19 @@ enum class GraphicsBackend : std::uint8_t {
     Unknown = 0,
     Vulkan,
     OpenGL,
-    Null,  // MOCK / headless
+    Null, // MOCK / headless
 };
 
 inline constexpr const char* to_string(GraphicsBackend backend) noexcept {
     switch (backend) {
-        case GraphicsBackend::Vulkan:
-            return "vulkan";
-        case GraphicsBackend::OpenGL:
-            return "opengl";
-        case GraphicsBackend::Null:
-            return "null";
-        case GraphicsBackend::Unknown:
-            return "unknown";
+    case GraphicsBackend::Vulkan:
+        return "vulkan";
+    case GraphicsBackend::OpenGL:
+        return "opengl";
+    case GraphicsBackend::Null:
+        return "null";
+    case GraphicsBackend::Unknown:
+        return "unknown";
     }
     return "unknown";
 }
@@ -113,7 +113,7 @@ struct ShaderDesc {
 
 struct VertexAttribute {
     std::uint32_t location = 0;
-    std::uint32_t components = 3;  // 1..4
+    std::uint32_t components = 3; // 1..4
     std::uint32_t stride_bytes = 0;
     std::uint32_t offset_bytes = 0;
 };
@@ -186,12 +186,13 @@ struct DeviceCapabilities {
 
 // Input validation at the module boundary. Backends must reject invalid
 // descriptors before allocating anything (systemplan/04 step 10).
-inline bool valid(const BufferDesc& desc) noexcept { return desc.size_bytes > 0; }
+inline bool valid(const BufferDesc& desc) noexcept {
+    return desc.size_bytes > 0;
+}
 
 inline bool valid(const TextureDesc& desc) noexcept {
-    return desc.width > 0 && desc.height > 0 && desc.depth > 0 &&
-           desc.mip_levels > 0 && desc.array_layers > 0 &&
-           desc.format != PixelFormat::Unknown;
+    return desc.width > 0 && desc.height > 0 && desc.depth > 0 && desc.mip_levels > 0 &&
+           desc.array_layers > 0 && desc.format != PixelFormat::Unknown;
 }
 
 inline bool valid(const ShaderDesc& desc) noexcept {
@@ -199,8 +200,7 @@ inline bool valid(const ShaderDesc& desc) noexcept {
 }
 
 inline bool valid(const VertexLayout& layout) noexcept {
-    if (layout.attribute_count == 0 ||
-        layout.attribute_count > kMaxVertexAttributes) {
+    if (layout.attribute_count == 0 || layout.attribute_count > kMaxVertexAttributes) {
         return false;
     }
     for (std::uint32_t i = 0; i < layout.attribute_count; ++i) {
@@ -217,4 +217,4 @@ inline bool valid(const DrawCall& call) noexcept {
            (call.vertex_count > 0 || call.index_count > 0);
 }
 
-}  // namespace poko
+} // namespace poko

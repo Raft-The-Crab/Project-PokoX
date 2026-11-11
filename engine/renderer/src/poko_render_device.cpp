@@ -8,10 +8,11 @@ namespace poko {
 
 NullRenderDevice::NullRenderDevice() : capabilities_(null_device_capabilities()) {}
 
-NullRenderDevice::NullRenderDevice(DeviceCapabilities capabilities)
-    : capabilities_(capabilities) {}
+NullRenderDevice::NullRenderDevice(DeviceCapabilities capabilities) : capabilities_(capabilities) {}
 
-const char* NullRenderDevice::name() const noexcept { return "null-mock"; }
+const char* NullRenderDevice::name() const noexcept {
+    return "null-mock";
+}
 
 GraphicsBackend NullRenderDevice::backend() const noexcept {
     return GraphicsBackend::Null;
@@ -26,30 +27,28 @@ bool NullRenderDevice::available() const noexcept {
 }
 
 bool NullRenderDevice::handle_live(RenderHandle handle) const noexcept {
-    return is_valid(handle) &&
-           static_cast<std::size_t>(handle.index) < resources_.size() &&
-           generations_[handle.index] == handle.generation &&
-           resources_[handle.index].alive;
+    return is_valid(handle) && static_cast<std::size_t>(handle.index) < resources_.size() &&
+           generations_[handle.index] == handle.generation && resources_[handle.index].alive;
 }
 
-Result<RenderHandle> NullRenderDevice::create(ResourceKind kind) {
+Result<RenderHandle> NullRenderDevice::create(ResourceKind kind, std::uint64_t size_bytes) {
     std::lock_guard<std::mutex> guard(mutex_);
-    return create_unlocked(kind);
+    return create_unlocked(kind, size_bytes);
 }
 
-Result<RenderHandle> NullRenderDevice::create_unlocked(ResourceKind kind) {
+Result<RenderHandle> NullRenderDevice::create_unlocked(ResourceKind kind,
+                                                       std::uint64_t size_bytes) {
     if (device_lost_.load(std::memory_order_relaxed)) {
-        return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition,
-                                          "device is lost");
+        return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition, "device is lost");
     }
     HandleIndex index;
     if (!free_.empty()) {
         index = free_.back();
         free_.pop_back();
-        resources_[index] = Resource{kind, true};
+        resources_[index] = Resource{kind, true, size_bytes};
     } else {
         index = static_cast<HandleIndex>(resources_.size());
-        resources_.push_back(Resource{kind, true});
+        resources_.push_back(Resource{kind, true, size_bytes});
         generations_.push_back(0);
     }
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
@@ -57,24 +56,21 @@ Result<RenderHandle> NullRenderDevice::create_unlocked(ResourceKind kind) {
 
 Result<RenderHandle> NullRenderDevice::create_buffer(const BufferDesc& desc) {
     if (!valid(desc)) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid buffer descriptor");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid buffer descriptor");
     }
-    return create(ResourceKind::Buffer);
+    return create(ResourceKind::Buffer, desc.size_bytes);
 }
 
 Result<RenderHandle> NullRenderDevice::create_texture(const TextureDesc& desc) {
     if (!valid(desc)) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid texture descriptor");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid texture descriptor");
     }
     return create(ResourceKind::Texture);
 }
 
 Result<RenderHandle> NullRenderDevice::create_shader(const ShaderDesc& desc) {
     if (!valid(desc)) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid shader descriptor");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid shader descriptor");
     }
     return create(ResourceKind::Shader);
 }
@@ -82,12 +78,10 @@ Result<RenderHandle> NullRenderDevice::create_shader(const ShaderDesc& desc) {
 Result<RenderHandle> NullRenderDevice::create_pipeline(const PipelineDesc& desc) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!valid(desc.layout)) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid vertex layout");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid vertex layout");
     }
     if (!handle_live(desc.vertex_shader) || !handle_live(desc.fragment_shader)) {
-        return Result<RenderHandle>::fail(ErrorCode::NotFound,
-                                          "shader handles are not live");
+        return Result<RenderHandle>::fail(ErrorCode::NotFound, "shader handles are not live");
     }
     return create_unlocked(ResourceKind::Pipeline);
 }
@@ -110,6 +104,27 @@ Status NullRenderDevice::require_frame() const {
     if (!in_frame_) {
         return Status::fail(ErrorCode::FailedPrecondition, "no frame in progress");
     }
+    return Status::success();
+}
+
+Status NullRenderDevice::update_buffer(RenderHandle handle, std::span<const std::byte> data,
+                                       std::uint64_t offset_bytes) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (device_lost_.load(std::memory_order_relaxed)) {
+        return Status::fail(ErrorCode::FailedPrecondition, "device is lost");
+    }
+    if (!handle_live(handle)) {
+        return Status::fail(ErrorCode::NotFound, "buffer handle is not live");
+    }
+    const auto& resource = resources_[handle.index];
+    if (resource.kind != ResourceKind::Buffer) {
+        return Status::fail(ErrorCode::InvalidArgument, "handle is not a buffer");
+    }
+    if (data.empty() || offset_bytes > resource.size_bytes ||
+        data.size() > resource.size_bytes - offset_bytes) {
+        return Status::fail(ErrorCode::OutOfRange, "buffer update is out of range");
+    }
+    ++buffer_updates_;
     return Status::success();
 }
 
@@ -174,8 +189,7 @@ bool NullRenderDevice::device_lost() const noexcept {
 Status NullRenderDevice::recover_from_device_loss() {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!device_lost_.load(std::memory_order_relaxed)) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not lost");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not lost");
     }
     // In-flight work is discarded; handles survive but commands are reset.
     device_lost_.store(false, std::memory_order_relaxed);
@@ -205,6 +219,11 @@ std::size_t NullRenderDevice::frame_count() const {
     return frame_count_;
 }
 
+std::size_t NullRenderDevice::buffer_update_count() const {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return buffer_updates_;
+}
+
 std::vector<ClearValue> NullRenderDevice::recorded_clears() const {
     std::lock_guard<std::mutex> guard(mutex_);
     return clears_;
@@ -227,11 +246,17 @@ bool NullRenderDevice::is_handle_live(RenderHandle handle) const {
     return handle_live(handle);
 }
 
-GraphicsBackend preferred_backend() noexcept { return GraphicsBackend::Vulkan; }
+GraphicsBackend preferred_backend() noexcept {
+    return GraphicsBackend::Vulkan;
+}
 
-GraphicsBackend fallback_backend() noexcept { return GraphicsBackend::OpenGL; }
+GraphicsBackend fallback_backend() noexcept {
+    return GraphicsBackend::OpenGL;
+}
 
-GraphicsBackend last_resort_backend() noexcept { return GraphicsBackend::Null; }
+GraphicsBackend last_resort_backend() noexcept {
+    return GraphicsBackend::Null;
+}
 
 DeviceCapabilities null_device_capabilities() noexcept {
     DeviceCapabilities capabilities;
@@ -245,4 +270,4 @@ DeviceCapabilities null_device_capabilities() noexcept {
     return capabilities;
 }
 
-}  // namespace poko
+} // namespace poko

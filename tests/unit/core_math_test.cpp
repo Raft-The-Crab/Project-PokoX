@@ -52,8 +52,7 @@ POKO_TEST(matrices_are_row_major_and_compose) {
     POKO_CHECK(nearly_equal(direction.z, 3.0f));
 
     const Mat4 combined =
-        multiply(Mat4::translation(Vec3{1.0f, 0.0f, 0.0f}),
-                 Mat4::scaling(Vec3{2.0f, 2.0f, 2.0f}));
+        multiply(Mat4::translation(Vec3{1.0f, 0.0f, 0.0f}), Mat4::scaling(Vec3{2.0f, 2.0f, 2.0f}));
     const Vec3 q = transform_point(combined, Vec3{1.0f, 1.0f, 1.0f});
     POKO_CHECK(nearly_equal(q.x, 3.0f));
     POKO_CHECK(nearly_equal(q.y, 2.0f));
@@ -61,8 +60,7 @@ POKO_TEST(matrices_are_row_major_and_compose) {
 }
 
 POKO_TEST(rotation_and_quaternions) {
-    const Vec3 rotated_x = transform_direction(Mat4::rotation_y(kHalfPi),
-                                               Vec3{1.0f, 0.0f, 0.0f});
+    const Vec3 rotated_x = transform_direction(Mat4::rotation_y(kHalfPi), Vec3{1.0f, 0.0f, 0.0f});
     POKO_CHECK(std::fabs(rotated_x.x) < 1.0e-4f);
     POKO_CHECK(nearly_equal(rotated_x.z, -1.0f, 1.0e-4f));
 

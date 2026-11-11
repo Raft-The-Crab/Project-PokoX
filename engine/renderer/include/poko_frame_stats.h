@@ -17,14 +17,26 @@ class FrameStats {
 public:
     void begin_frame();
     void record_draw(std::uint32_t triangles) noexcept;
-    void set_gpu_time_ms(double milliseconds) noexcept { gpu_ms_ = milliseconds; }
+    void set_gpu_time_ms(double milliseconds) noexcept {
+        gpu_ms_ = milliseconds;
+    }
     void end_frame();
 
-    std::uint64_t frame_index() const noexcept { return frame_index_; }
-    std::uint32_t draw_calls() const noexcept { return draw_calls_; }
-    std::uint64_t triangles() const noexcept { return triangles_; }
-    double cpu_frame_ms() const noexcept { return cpu_ms_; }
-    double gpu_frame_ms() const noexcept { return gpu_ms_; }
+    std::uint64_t frame_index() const noexcept {
+        return frame_index_;
+    }
+    std::uint32_t draw_calls() const noexcept {
+        return draw_calls_;
+    }
+    std::uint64_t triangles() const noexcept {
+        return triangles_;
+    }
+    double cpu_frame_ms() const noexcept {
+        return cpu_ms_;
+    }
+    double gpu_frame_ms() const noexcept {
+        return gpu_ms_;
+    }
 
     void reset() noexcept;
 
@@ -43,4 +55,4 @@ private:
     double gpu_ms_ = 0.0;
 };
 
-}  // namespace poko
+} // namespace poko

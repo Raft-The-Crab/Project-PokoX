@@ -7,17 +7,15 @@ namespace poko {
 void Camera::set_perspective(float fov_y_radians, float aspect, float near_plane,
                              float far_plane) noexcept {
     // Invalid values fall back to safe defaults rather than producing NaN.
-    fov_y_ = fov_y_radians > 0.0f && fov_y_radians < math::kPi
-                 ? fov_y_radians
-                 : math::kHalfPi;
+    fov_y_ = fov_y_radians > 0.0f && fov_y_radians < math::kPi ? fov_y_radians : math::kHalfPi;
     aspect_ = aspect > 0.0f ? aspect : 1.0f;
     near_plane_ = near_plane > 0.0f ? near_plane : 0.1f;
     far_plane_ = far_plane > near_plane_ ? far_plane : near_plane_ + 100.0f;
     orthographic_ = false;
 }
 
-void Camera::set_orthographic(float left, float right, float bottom, float top,
-                              float near_plane, float far_plane) noexcept {
+void Camera::set_orthographic(float left, float right, float bottom, float top, float near_plane,
+                              float far_plane) noexcept {
     ortho_left_ = left;
     ortho_right_ = right > left ? right : left + 1.0f;
     ortho_bottom_ = bottom;
@@ -80,4 +78,4 @@ math::Mat4 Camera::view_projection() const {
     return math::multiply(projection_matrix(), view_matrix());
 }
 
-}  // namespace poko
+} // namespace poko

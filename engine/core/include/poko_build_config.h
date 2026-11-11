@@ -64,4 +64,4 @@ constexpr const char* name() noexcept {
     }
 }
 
-}  // namespace poko::config
+} // namespace poko::config

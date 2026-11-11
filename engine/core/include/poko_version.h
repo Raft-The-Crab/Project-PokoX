@@ -16,4 +16,4 @@ const char* version_string() noexcept;
 const char* build_config_name() noexcept;
 const char* platform_name() noexcept;
 
-}  // namespace poko
+} // namespace poko

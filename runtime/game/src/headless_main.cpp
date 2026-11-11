@@ -28,10 +28,8 @@ int run_core_self_check() {
     poko::Logger::instance().set_level(poko::LogLevel::Debug);
 
     POKO_LOG_INFO("runtime", "headless runtime " << poko::version_string()
-                                                 << " config="
-                                                 << poko::build_config_name()
-                                                 << " platform="
-                                                 << poko::platform_name());
+                                                 << " config=" << poko::build_config_name()
+                                                 << " platform=" << poko::platform_name());
 
     POKO_ASSERT(poko::version_string() != nullptr, "version string must exist");
     POKO_ASSERT(!poko::config::kDevTools || poko::config::kDevelopmentLike,
@@ -41,10 +39,9 @@ int run_core_self_check() {
         POKO_LOG_INFO("runtime", "headless mode: no graphics, audio or player UI");
     }
 
-    poko::Settings settings = poko::Settings::parse(
-        "# engine core smoke settings\n"
-        "sim.fixed_step = 0.016666\n"
-        "diagnostics.enabled = on\n");
+    poko::Settings settings = poko::Settings::parse("# engine core smoke settings\n"
+                                                    "sim.fixed_step = 0.016666\n"
+                                                    "diagnostics.enabled = on\n");
     POKO_ASSERT(settings.has("sim.fixed_step"), "settings must parse");
 
     poko::Diagnostics diagnostics;
@@ -75,24 +72,21 @@ int run_core_self_check() {
     POKO_ASSERT(registry.release(handle), "resource must release");
     POKO_ASSERT(registry.get(handle) == nullptr, "stale handle must be invalid");
 
-    [[maybe_unused]] const poko::math::Vec3 rotated =
-        poko::math::transform_direction(
-            poko::math::Mat4::rotation_y(poko::math::kHalfPi),
-            poko::math::Vec3{1.0f, 0.0f, 0.0f});
+    [[maybe_unused]] const poko::math::Vec3 rotated = poko::math::transform_direction(
+        poko::math::Mat4::rotation_y(poko::math::kHalfPi), poko::math::Vec3{1.0f, 0.0f, 0.0f});
     POKO_ASSERT(poko::math::nearly_equal(rotated.z, -1.0f, 1.0e-4f),
                 "rotation must be deterministic");
 
     POKO_ASSERT(bus.unsubscribe(subscription), "subscription must unsubscribe");
     diagnostics.set_gauge("jobs.completed", static_cast<double>(jobs.completed()));
 
-    POKO_LOG_DEBUG("runtime", "self-check complete, ticks="
-                                  << diagnostics.counter("ticks")
-                                  << " jobs=" << jobs.completed());
+    POKO_LOG_DEBUG("runtime", "self-check complete, ticks=" << diagnostics.counter("ticks")
+                                                            << " jobs=" << jobs.completed());
     std::cout << "headless runtime self-check: OK\n";
     return 0;
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     // Contain any unexpected exception so the harness reports a clean failure.

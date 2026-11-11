@@ -21,9 +21,7 @@ POKO_TEST(level_filtering) {
 POKO_TEST(sink_receives_formatted_records) {
     auto& logger = poko::Logger::instance();
     std::vector<poko::LogRecord> records;
-    logger.set_sink([&records](const poko::LogRecord& record) {
-        records.push_back(record);
-    });
+    logger.set_sink([&records](const poko::LogRecord& record) { records.push_back(record); });
     logger.set_level(poko::LogLevel::Trace);
 
     POKO_LOG_INFO("unit", "hello " << 42);

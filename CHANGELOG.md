@@ -78,6 +78,18 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
   shader cache determinism, camera math, batching and frame stats/facade.
 - `engine/renderer/docs/api.md`, `docs/decisions/0003-phase1-renderer-foundations.md`
   and a renderer note in `third_party/DEPENDENCIES.md`.
+- SDL3 `release-3.4.20` pinned (SHA-256-verified codeload tarball, zlib) and
+  fetched only when `POKO_FETCH_DEPENDENCIES=ON`; generated gl3w OpenGL loader
+  sources vendored under `third_party/vendored/gl3w/` (The Unlicense) so builds
+  stay offline (`docs/decisions/0004-sdl3-and-opengl-backend.md`).
+- `poko_render_gl` [PRODUCTION]: OpenGL 3.3 core implementation of
+  `api::IRenderDevice` — buffers with `update_buffer`, 2D textures, GLSL
+  compile/link, pipeline state, clear/draw/frame lifecycle.
+- `IRenderDevice::update_buffer` seam (raw byte upload with bounds checks);
+  `poko_windowed_demo` is now a real SDL3 window rendering a triangle
+  (`--frames N` for automated runs), still a labelled STUB in offline builds.
+- clang-format 23.1.5 and clang-tidy 23.1.4 pinned; the CI formatting/static
+  analysis job is now blocking and the tree is clang-format clean.
 
 ### Changed
 
