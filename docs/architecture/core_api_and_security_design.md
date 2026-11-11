@@ -14,13 +14,14 @@ each interface.
 
 ## Early interface seams
 
-Declared as `STUB` boundary types in `engine/core/include/poko_api_seams.h`.
-No Phase 0 target implements them.
+Declared as boundary types in `engine/core/include/poko_api_seams.h`. Phase 0
+declared them as `STUB` placeholders; Phase 1 gives the two engine-core-owned
+interfaces real signatures and implementations. The rest remain `STUB`.
 
 | Interface | Owning subsystem | Phase | Boundary rule |
 |---|---|---|---|
-| `IPlatformFileSystem` | engine core / platform abstraction | 1 | OS filesystem behind a Poko interface |
-| `IJobSystem` | engine core | 1 | explicit threading contracts, no global mutable state |
+| `IPlatformFileSystem` | engine core / platform abstraction | 1 (implemented) | root-scoped `LocalFileSystem`, traversal rejected |
+| `IJobSystem` | engine core | 1 (implemented) | `JobSystem` thread pool, exceptions contained |
 | `IRenderDevice` | renderer | 1 | Vulkan primary, OpenGL fallback |
 | `IAssetProvider` | asset pipeline | 1 | async loading, handles, caching |
 | `IPhysicsWorld` | physics | 1 | custom physics, documented determinism |
@@ -42,9 +43,10 @@ No Phase 0 target implements them.
 - Untrusted games run in isolated environments.
 - Final UI consumes stable application APIs and does not own business rules.
 
-Enforced mechanically in Phase 0 by: `poko_core` links nothing; the interface
-seams are an `INTERFACE` library with no implementations; the `Server`
-configuration excludes windowed targets; and `POKO_FETCH_DEPENDENCIES` is `OFF`.
+Enforced mechanically by: `poko_core` links no graphics, backend or UI
+vendors; the two implemented seams live behind Poko-owned interfaces; the
+`Server` configuration excludes windowed targets; and
+`POKO_FETCH_DEPENDENCIES` is `OFF`.
 
 ## Core types (`engine/core`)
 

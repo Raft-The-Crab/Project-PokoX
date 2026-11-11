@@ -37,6 +37,7 @@ message(STATUS "PokoX ${PROJECT_VERSION} | config=${POKO_ACTIVE_CONFIG} | tests=
 # Targets. Each subsystem owns its own CMakeLists.txt.
 # ---------------------------------------------------------------------------
 add_subdirectory(engine/core)
+add_subdirectory(engine/platform_abstraction)
 
 if(POKO_BUILD_TOOLS)
     add_subdirectory(tools)

@@ -63,8 +63,9 @@ bash scripts/build/verify_all.sh
 
 | Target | Label | Purpose |
 |---|---|---|
-| `poko_core` | `PRODUCTION` | version, build config, IDs, logging, assertions |
-| `poko_api_seams` | interface | STUB declarations of the early interface seams |
+| `poko_core` | `PRODUCTION` | version, build config, IDs, results, math, clocks, events, jobs, diagnostics, settings, ownership, logging, assertions |
+| `poko_platform` | `LOCAL_DEV` | root-scoped `LocalFileSystem` implementing `IPlatformFileSystem` |
+| `poko_api_seams` | interface | interface seams from `systemplan/01` (two implemented, rest STUB) |
 | `poko_headless` | `LOCAL_DEV` | runnable headless demo (exit gate) |
 | `poko_windowed_demo` | `STUB` | windowed demo placeholder until SDL2/Vulkan are pinned |
 | `poko_assetc` | `STUB` | asset compiler CLI |
@@ -72,7 +73,7 @@ bash scripts/build/verify_all.sh
 | `poko_verifier` | `STUB` | package signature/manifest verifier |
 | `poko_serverctl` | `STUB` | dedicated server diagnostics CLI |
 | `poko_server` | `STUB` | shared headless dedicated server runtime |
-| `poko_test_*` | — | four unit-test executables registered with CTest |
+| `poko_test_*` | `LOCAL_DEV` | nine unit-test executables registered with CTest |
 
 `STUB`, `LOCAL_DEV`, `MOCK` and `PRODUCTION` are the implementation labels from
 `systemplan/00`. Labels are compiled into each binary (`POKO_IMPL_LABEL`) and

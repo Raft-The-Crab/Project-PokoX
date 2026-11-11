@@ -1,7 +1,8 @@
 add_library(poko_core STATIC
     src/poko_version.cpp
     src/poko_log.cpp
-    src/poko_assert.cpp)
+    src/poko_assert.cpp
+    src/poko_job.cpp)
 
 target_include_directories(poko_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

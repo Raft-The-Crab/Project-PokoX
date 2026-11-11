@@ -49,6 +49,22 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
   `packages/schema/manifest.schema.json`,
   `third_party/DEPENDENCIES.md`, `third_party/licenses/INVENTORY.md` and
   `docs/decisions/0001-phase0-build-foundation.md`.
+- Phase 1 engine core (`systemplan/03`): `poko_result.h` (standardized errors),
+  `poko_math.h` (vectors, row-major matrices, quaternions with a documented
+  right-handed coordinate system), `poko_clock.h` (steady-clock stopwatch and
+  capped fixed timestep), `poko_event.h` (instance-based `EventBus`),
+  `poko_job.h` (thread-pool `JobSystem`), `poko_diagnostics.h`,
+  `poko_settings.h` and `poko_ownership.h` (counters/gauges/timers, typed
+  configuration, `ObserverPtr`/`ScopeExit`/generation-checked
+  `ResourceRegistry`).
+- `LocalFileSystem` in `engine/platform_abstraction/` implementing
+  `api::IPlatformFileSystem` with a root-scoped path sandbox; `IJobSystem` and
+  `IPlatformFileSystem` now have concrete signatures.
+- Five additional CTest unit-test executables covering result types, math,
+  clocks/events/jobs, diagnostics/settings/ownership and the filesystem. The
+  headless console demo now exercises all core subsystems.
+- `engine/core/docs/api.md` documenting core APIs, ownership and thread-safety
+  contracts, and `docs/decisions/0002-phase1-engine-core.md`.
 
 ### Changed
 
