@@ -94,6 +94,8 @@ if(POKO_RENDER_VULKAN)
     set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
     set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
     set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+    # SPIRV-Tools is not a pinned dependency; the optimizer stays off.
+    set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(glslang
         URL "https://codeload.github.com/KhronosGroup/glslang/tar.gz/e1b562a8bed273a02f30b59b66a5d499793cede5"
         URL_HASH "SHA256=907174a24713c6202c146f164bf81783f1fbc79c8cb821a30f18f159eb980312"

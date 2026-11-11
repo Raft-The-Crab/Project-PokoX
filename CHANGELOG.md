@@ -90,6 +90,12 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
   (`--frames N` for automated runs), still a labelled STUB in offline builds.
 - clang-format 23.1.5 and clang-tidy 23.1.4 pinned; the CI formatting/static
   analysis job is now blocking and the tree is clang-format clean.
+- Vulkan backend (`systemplan/04` primary): Vulkan-Headers, Vulkan-Loader and
+  glslang pinned to `vulkan-sdk-1.4.363.0` (Apache-2.0/BSD-3-Clause), fetched
+  only when `POKO_RENDER_VULKAN=ON`; `poko_render_vulkan` [PRODUCTION]
+  implements `IRenderDevice` (swapchain, render pass + depth, frames in
+  flight, glslang GLSL→SPIR-V, pipelines, draws) and `vulkan_demo` renders a
+  triangle on a real VkSurfaceKHR (`docs/decisions/0005-vulkan-render-backend.md`).
 
 ### Changed
 

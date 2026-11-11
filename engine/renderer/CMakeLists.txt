@@ -59,8 +59,12 @@ if(POKO_RENDER_VULKAN)
     target_link_libraries(poko_render_vulkan PUBLIC
         poko_core
         Vulkan::Headers
-        glslang::glslang
-        glslang::SPIRV
+        glslang
+        SPIRV
+        MachineIndependent
+        GenericCodeGen
+        OSDependent
+        glslang-default-resource-limits
         SDL3::SDL3)
     if(TARGET Vulkan::VulkanLoader)
         target_link_libraries(poko_render_vulkan PUBLIC Vulkan::VulkanLoader)

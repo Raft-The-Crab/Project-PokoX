@@ -3,6 +3,7 @@
 // Only built when POKO_RENDER_VULKAN=ON. Usage: --frames N or until closed.
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
 #include <cstdint>
 #include <cstdlib>
@@ -40,9 +41,9 @@ void main() {
 )";
 
 constexpr float kTriangle[] = {
-    -0.6f, -0.4f, 0.0f,  //
-    0.6f,  -0.4f, 0.0f,  //
-    0.0f,  0.6f,  0.0f,  //
+    -0.6f, -0.4f, 0.0f, //
+    0.6f,  -0.4f, 0.0f, //
+    0.0f,  0.6f,  0.0f, //
 };
 
 int run(int argc, char** argv) {
@@ -57,7 +58,7 @@ int run(int argc, char** argv) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << '\n';
         return 1;
     }
-    SDL_Window* window = SDL_CreateWindow("PokoX vulkan demo", 1280, 720, 0);
+    SDL_Window* window = SDL_CreateWindow("PokoX vulkan demo", 1280, 720, SDL_WINDOW_VULKAN);
     if (window == nullptr) {
         std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << '\n';
         SDL_Quit();
@@ -66,31 +67,37 @@ int run(int argc, char** argv) {
 
     // Vulkan instance with the extensions SDL requires.
     Uint32 ext_count = 0;
-    if (!SDL_Vulkan_GetInstanceExtensions(window, &ext_count, nullptr)) {
+    const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&ext_count);
+    if (exts == nullptr || ext_count == 0) {
         std::cerr << "SDL_Vulkan_GetInstanceExtensions failed\n";
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
-    const char** exts = static_cast<const char**>(SDL_malloc(ext_count * sizeof(char*)));
-    SDL_Vulkan_GetInstanceExtensions(window, &ext_count, exts);
 
-    VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+    if (!SDL_Vulkan_LoadLibrary(nullptr)) {
+        std::cerr << "SDL_Vulkan_LoadLibrary failed: " << SDL_GetError() << '\n';
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    VkApplicationInfo app{};
+    app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app.pApplicationName = "poko_windowed_demo";
     app.apiVersion = VK_API_VERSION_1_1;
-    VkInstanceCreateInfo ici{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+    VkInstanceCreateInfo ici{};
+    ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     ici.pApplicationInfo = &app;
     ici.enabledExtensionCount = ext_count;
     ici.ppEnabledExtensionNames = exts;
     VkInstance instance = VK_NULL_HANDLE;
     if (vkCreateInstance(&ici, nullptr, &instance) != VK_SUCCESS) {
         std::cerr << "vkCreateInstance failed\n";
-        SDL_free(exts);
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
-    SDL_free(exts);
 
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     if (!SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface)) {
@@ -133,8 +140,7 @@ int run(int argc, char** argv) {
 
     int exit_code = 0;
     {
-        auto device = std::make_unique<poko::VulkanRenderDevice>(
-            instance, phys, surface);
+        auto device = std::make_unique<poko::VulkanRenderDevice>(instance, phys, surface);
         if (!device->initialize()) {
             std::cerr << "Vulkan device initialization failed\n";
             exit_code = 1;
@@ -142,22 +148,20 @@ int run(int argc, char** argv) {
             int w = 0, h = 0;
             SDL_GetWindowSizeInPixels(window, &w, &h);
             const auto caps = device->capabilities();
-            std::cout << "poko_windowed_demo " << poko::version_string()
-                      << " [" << POKO_IMPL_LABEL << "]\n"
+            std::cout << "poko_windowed_demo " << poko::version_string() << " [" << POKO_IMPL_LABEL
+                      << "]\n"
                       << "backend: " << poko::to_string(caps.backend)
-                      << " device: " << caps.device_name << '\n';
-            if (const auto sc = device->recreate_swapchain(
-                    static_cast<std::uint32_t>(w),
-                    static_cast<std::uint32_t>(h));
+                      << " device: " << caps.device_name << std::endl;
+            if (const auto sc = device->recreate_swapchain(static_cast<std::uint32_t>(w),
+                                                           static_cast<std::uint32_t>(h));
                 !sc.ok()) {
                 std::cerr << "swapchain failed: " << sc.error().message << '\n';
                 exit_code = 1;
             } else {
                 poko::Renderer renderer(std::move(device));
-                const poko::ShaderDesc vs{poko::ShaderStage::Vertex,
-                                          kVertexShader, "main", "tri.vert"};
-                const poko::ShaderDesc fs{poko::ShaderStage::Fragment,
-                                          kFragmentShader, "main",
+                const poko::ShaderDesc vs{poko::ShaderStage::Vertex, kVertexShader, "main",
+                                          "tri.vert"};
+                const poko::ShaderDesc fs{poko::ShaderStage::Fragment, kFragmentShader, "main",
                                           "tri.frag"};
                 const auto vsh = renderer.device().create_shader(vs);
                 const auto fsh = renderer.device().create_shader(fs);
@@ -174,20 +178,15 @@ int run(int argc, char** argv) {
                     pipe.depth_test = false;
                     pipe.debug_name = "tri.pipeline";
                     const auto pipeline = renderer.device().create_pipeline(pipe);
-                    const auto vb = renderer.device().create_buffer(
-                        poko::BufferDesc{sizeof(kTriangle),
-                                         poko::BufferUsage::Vertex, true,
-                                         "tri.vb"});
+                    const auto vb = renderer.device().create_buffer(poko::BufferDesc{
+                        sizeof(kTriangle), poko::BufferUsage::Vertex, true, "tri.vb"});
                     if (!pipeline.ok() || !vb.ok()) {
                         std::cerr << "pipeline/buffer creation failed\n";
                         exit_code = 1;
                     } else {
                         const std::span<const std::byte> bytes{
-                            reinterpret_cast<const std::byte*>(kTriangle),
-                            sizeof(kTriangle)};
-                        if (!renderer.device()
-                                 .update_buffer(vb.value(), bytes)
-                                 .ok()) {
+                            reinterpret_cast<const std::byte*>(kTriangle), sizeof(kTriangle)};
+                        if (!renderer.device().update_buffer(vb.value(), bytes).ok()) {
                             std::cerr << "vertex upload failed\n";
                             exit_code = 1;
                         } else {
@@ -202,26 +201,24 @@ int run(int argc, char** argv) {
                                 SDL_Event event;
                                 while (SDL_PollEvent(&event)) {
                                     if (event.type == SDL_EVENT_QUIT ||
-                                        event.type ==
-                                            SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                                        event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                                         running = false;
                                     }
                                 }
-                                if (!running ||
-                                    (frame_limit >= 0 && frames >= frame_limit)) {
+                                if (!running || (frame_limit >= 0 && frames >= frame_limit)) {
                                     break;
                                 }
                                 const auto st = renderer.render_frame(
                                     poko::ClearValue{0.08f, 0.09f, 0.12f, 1.0f});
                                 if (!st.ok()) {
-                                    std::cerr << "render_frame failed: "
-                                              << st.error().message << '\n';
+                                    std::cerr << "render_frame failed: " << st.error().message
+                                              << '\n';
                                     exit_code = 1;
                                     break;
                                 }
                                 ++frames;
                             }
-                            std::cout << "frames rendered: " << frames << '\n';
+                            std::cout << "frames rendered: " << frames << std::endl;
                         }
                     }
                 }
@@ -235,6 +232,8 @@ int run(int argc, char** argv) {
     return exit_code;
 }
 
-}  // namespace
+} // namespace
 
-int main(int argc, char** argv) { return run(argc, argv); }
+int main(int argc, char** argv) {
+    return run(argc, argv);
+}

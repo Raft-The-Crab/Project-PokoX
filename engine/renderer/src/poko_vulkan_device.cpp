@@ -6,11 +6,28 @@
 #include <string>
 #include <vector>
 
+// Vulkan and glslang headers are C-style aggregate APIs; their partial
+// initializers and shadowing are idiomatic upstream and not our code.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#endif
 #include <vulkan/vulkan.h>
 
-#include <glslang/Public/ShaderLang.h>
-#include <glslang/Public/ResourceLimits.h>
 #include <SPIRV/GlslangToSpv.h>
+#include <glslang/Include/InfoSink.h>
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/Public/ShaderLang.h>
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+// Vulkan create-info structs are idiomatically brace-initialized with only
+// sType; GCC warns on every omitted member. Keep the warning off for this
+// translation unit only.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
 
 namespace poko {
 namespace {
@@ -20,101 +37,100 @@ namespace {
 
 EShLanguage shader_language(ShaderStage stage) noexcept {
     switch (stage) {
-        case ShaderStage::Vertex:
-            return EShLangVertex;
-        case ShaderStage::Fragment:
-            return EShLangFragment;
-        case ShaderStage::Compute:
-            return EShLangCompute;
+    case ShaderStage::Vertex:
+        return EShLangVertex;
+    case ShaderStage::Fragment:
+        return EShLangFragment;
+    case ShaderStage::Compute:
+        return EShLangCompute;
     }
     return EShLangVertex;
 }
 
 VkFormat vk_format(PixelFormat format) noexcept {
     switch (format) {
-        case PixelFormat::RGBA8:
-            return VK_FORMAT_R8G8B8A8_UNORM;
-        case PixelFormat::BGRA8:
-            return VK_FORMAT_B8G8R8A8_UNORM;
-        case PixelFormat::RGB8:
-            return VK_FORMAT_R8G8B8_UNORM;
-        case PixelFormat::R8:
-            return VK_FORMAT_R8_UNORM;
-        case PixelFormat::RGBA16F:
-            return VK_FORMAT_R16G16B16A16_SFLOAT;
-        case PixelFormat::RGBA32F:
-            return VK_FORMAT_R32G32B32A32_SFLOAT;
-        case PixelFormat::Depth24Stencil8:
-            return VK_FORMAT_D24_UNORM_S8_UINT;
-        case PixelFormat::Depth32F:
-            return VK_FORMAT_D32_SFLOAT;
-        case PixelFormat::Unknown:
-            break;
+    case PixelFormat::RGBA8:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    case PixelFormat::BGRA8:
+        return VK_FORMAT_B8G8R8A8_UNORM;
+    case PixelFormat::RGB8:
+        return VK_FORMAT_R8G8B8_UNORM;
+    case PixelFormat::R8:
+        return VK_FORMAT_R8_UNORM;
+    case PixelFormat::RGBA16F:
+        return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case PixelFormat::RGBA32F:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case PixelFormat::Depth24Stencil8:
+        return VK_FORMAT_D24_UNORM_S8_UINT;
+    case PixelFormat::Depth32F:
+        return VK_FORMAT_D32_SFLOAT;
+    case PixelFormat::Unknown:
+        break;
     }
     return VK_FORMAT_UNDEFINED;
 }
 
 VkBufferUsageFlags buffer_usage(BufferUsage usage) noexcept {
     switch (usage) {
-        case BufferUsage::Vertex:
-            return VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        case BufferUsage::Index:
-            return VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        case BufferUsage::Uniform:
-            return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        case BufferUsage::Storage:
-            return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        case BufferUsage::Staging:
-            return VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                   VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    case BufferUsage::Vertex:
+        return VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    case BufferUsage::Index:
+        return VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    case BufferUsage::Uniform:
+        return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    case BufferUsage::Storage:
+        return VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    case BufferUsage::Staging:
+        return VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     }
     return 0;
 }
 
 VkPrimitiveTopology vk_topology(PrimitiveTopology topology) noexcept {
     switch (topology) {
-        case PrimitiveTopology::Triangles:
-            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        case PrimitiveTopology::TriangleStrip:
-            return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-        case PrimitiveTopology::Lines:
-            return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-        case PrimitiveTopology::Points:
-            return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    case PrimitiveTopology::Triangles:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    case PrimitiveTopology::TriangleStrip:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    case PrimitiveTopology::Lines:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    case PrimitiveTopology::Points:
+        return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
     }
     return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 }
 
 VkCullModeFlags vk_cull(CullMode mode) noexcept {
     switch (mode) {
-        case CullMode::None:
-            return VK_CULL_MODE_NONE;
-        case CullMode::Front:
-            return VK_CULL_MODE_FRONT_BIT;
-        case CullMode::Back:
-            return VK_CULL_MODE_BACK_BIT;
+    case CullMode::None:
+        return VK_CULL_MODE_NONE;
+    case CullMode::Front:
+        return VK_CULL_MODE_FRONT_BIT;
+    case CullMode::Back:
+        return VK_CULL_MODE_BACK_BIT;
     }
     return VK_CULL_MODE_BACK_BIT;
 }
 
 VkCompareOp vk_compare(CompareOp op) noexcept {
     switch (op) {
-        case CompareOp::Never:
-            return VK_COMPARE_OP_NEVER;
-        case CompareOp::Less:
-            return VK_COMPARE_OP_LESS;
-        case CompareOp::Equal:
-            return VK_COMPARE_OP_EQUAL;
-        case CompareOp::LessOrEqual:
-            return VK_COMPARE_OP_LESS_OR_EQUAL;
-        case CompareOp::Greater:
-            return VK_COMPARE_OP_GREATER;
-        case CompareOp::NotEqual:
-            return VK_COMPARE_OP_NOT_EQUAL;
-        case CompareOp::GreaterOrEqual:
-            return VK_COMPARE_OP_GREATER_OR_EQUAL;
-        case CompareOp::Always:
-            return VK_COMPARE_OP_ALWAYS;
+    case CompareOp::Never:
+        return VK_COMPARE_OP_NEVER;
+    case CompareOp::Less:
+        return VK_COMPARE_OP_LESS;
+    case CompareOp::Equal:
+        return VK_COMPARE_OP_EQUAL;
+    case CompareOp::LessOrEqual:
+        return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case CompareOp::Greater:
+        return VK_COMPARE_OP_GREATER;
+    case CompareOp::NotEqual:
+        return VK_COMPARE_OP_NOT_EQUAL;
+    case CompareOp::GreaterOrEqual:
+        return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case CompareOp::Always:
+        return VK_COMPARE_OP_ALWAYS;
     }
     return VK_COMPARE_OP_LESS_OR_EQUAL;
 }
@@ -122,51 +138,52 @@ VkCompareOp vk_compare(CompareOp op) noexcept {
 VkFormat vk_attrib_format(std::uint32_t components) noexcept {
     // Attributes are 32-bit float tuples (same assumption as the GL backend).
     switch (components) {
-        case 1:
-            return VK_FORMAT_R32_SFLOAT;
-        case 2:
-            return VK_FORMAT_R32G32_SFLOAT;
-        case 3:
-            return VK_FORMAT_R32G32B32_SFLOAT;
-        case 4:
-            return VK_FORMAT_R32G32B32A32_SFLOAT;
-        default:
-            return VK_FORMAT_UNDEFINED;
+    case 1:
+        return VK_FORMAT_R32_SFLOAT;
+    case 2:
+        return VK_FORMAT_R32G32_SFLOAT;
+    case 3:
+        return VK_FORMAT_R32G32B32_SFLOAT;
+    case 4:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    default:
+        return VK_FORMAT_UNDEFINED;
     }
 }
 
 // Compiles GLSL source to SPIR-V via glslang. Returns false on failure with
 // the log appended to `log_out`.
 bool compile_spirv(ShaderStage stage, const std::string& source,
-                   std::vector<std::uint32_t>& out_spirv,
-                   std::string& log_out) {
-    glslang::TShader shader(static_cast_EShLanguage>(shader_language(stage)));
+                   std::vector<std::uint32_t>& out_spirv, std::string& log_out) {
+    const EShLanguage lang = shader_language(stage);
+    glslang::TShader shader(lang);
     const char* text = source.c_str();
     shader.setStrings(&text, 1);
     shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
-    shader.setEnvInput(glslang::EShSourceGlsl, shader_language(stage),
-                       glslang::EShClientVulkan, 100);
-    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShClientNone);
-    if (!shader.parse(GetDefaultResources(), 460, false, log_out)) {
+    shader.setEnvInput(glslang::EShSourceGlsl, lang, glslang::EShClientVulkan, 100);
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
+    const EShMessages messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules);
+    if (!shader.parse(GetDefaultResources(), 460, false, messages)) {
+        log_out = shader.getInfoLog();
+        log_out += shader.getInfoDebugLog();
         return false;
     }
     glslang::TProgram program;
     program.addShader(&shader);
-    if (!program.link(log_out)) {
+    if (!program.link(messages)) {
+        log_out = program.getInfoLog();
+        log_out += program.getInfoDebugLog();
         return false;
     }
     program.mapIO();
-    glslang::GlslangToSpv(*program.getIntermediate(shader_language(stage)),
-                          out_spirv);
+    glslang::GlslangToSpv(*program.getIntermediate(lang), out_spirv);
     return !out_spirv.empty();
 }
 
-}  // namespace
+} // namespace
 
-VulkanRenderDevice::VulkanRenderDevice(void* instance, void* physical_device,
-                                       void* surface)
-    : instance_(instance), physical_device_(physical_device),
-      surface_(surface) {}
+VulkanRenderDevice::VulkanRenderDevice(void* instance, void* physical_device, void* surface)
+    : instance_(instance), physical_device_(physical_device), surface_(surface) {}
 
 VulkanRenderDevice::~VulkanRenderDevice() {
     if (!initialized_ || device_ == nullptr) {
@@ -174,18 +191,19 @@ VulkanRenderDevice::~VulkanRenderDevice() {
     }
     auto* dev = static_cast<VkDevice>(device_);
     vkDeviceWaitIdle(dev);
-    for (auto& slot : swap_images_) {
-        auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
-        auto* fb = static_cast<VkFramebuffer>(slot.framebuffer);
-        auto* fence = static_cast<VkFence>(slot.fence);
-        auto* acq = static_cast<VkSemaphore>(slot.acquire_sem);
-        auto* rnd = static_cast<VkSemaphore>(slot.render_sem);
+    for (auto& image : swap_images_) {
+        auto* fb = static_cast<VkFramebuffer>(image.framebuffer);
         if (fb != nullptr) {
             vkDestroyFramebuffer(dev, fb, nullptr);
         }
+    }
+    for (auto& slot : frame_slots_) {
+        auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
+        auto* fence = static_cast<VkFence>(slot.fence);
+        auto* acq = static_cast<VkSemaphore>(slot.acquire_sem);
+        auto* rnd = static_cast<VkSemaphore>(slot.render_sem);
         if (cb != nullptr) {
-            vkFreeCommandBuffers(dev, static_cast<VkCommandPool>(command_pool_),
-                                 1, &cb);
+            vkFreeCommandBuffers(dev, static_cast<VkCommandPool>(command_pool_), 1, &cb);
         }
         if (fence != nullptr) {
             vkDestroyFence(dev, fence, nullptr);
@@ -201,21 +219,16 @@ VulkanRenderDevice::~VulkanRenderDevice() {
         destroy_resource_objects(resource);
     }
     if (swapchain_ != nullptr) {
-        vkDestroySwapchainKHR(dev, static_cast<VkSwapchainKHR>(swapchain_),
-                              nullptr);
+        vkDestroySwapchainKHR(dev, static_cast<VkSwapchainKHR>(swapchain_), nullptr);
     }
     if (render_pass_ != nullptr) {
-        vkDestroyRenderPass(dev, static_cast<VkRenderPass>(render_pass_),
-                            nullptr);
+        vkDestroyRenderPass(dev, static_cast<VkRenderPass>(render_pass_), nullptr);
     }
     if (pipeline_layout_ != nullptr) {
-        vkDestroyPipelineLayout(dev,
-                                static_cast<VkPipelineLayout>(pipeline_layout_),
-                                nullptr);
+        vkDestroyPipelineLayout(dev, static_cast<VkPipelineLayout>(pipeline_layout_), nullptr);
     }
     if (command_pool_ != nullptr) {
-        vkDestroyCommandPool(dev, static_cast<VkCommandPool>(command_pool_),
-                             nullptr);
+        vkDestroyCommandPool(dev, static_cast<VkCommandPool>(command_pool_), nullptr);
     }
     vkDestroyDevice(dev, nullptr);
     glslang::FinalizeProcess();
@@ -224,46 +237,35 @@ VulkanRenderDevice::~VulkanRenderDevice() {
 void VulkanRenderDevice::destroy_resource_objects(Resource& resource) {
     auto* dev = static_cast<VkDevice>(device_);
     switch (resource.kind) {
-        case Kind::Buffer:
-            if (resource.object != nullptr) {
-                vkDestroyBuffer(dev, static_cast<VkBuffer>(resource.object),
-                                nullptr);
-            }
-            if (resource.object2 != nullptr) {
-                vkFreeMemory(dev,
-                             static_cast<VkDeviceMemory>(resource.object2),
-                             nullptr);
-            }
-            break;
-        case Kind::Texture:
-            if (resource.object3 != nullptr) {
-                vkDestroyImageView(dev,
-                                   static_cast<VkImageView>(resource.object3),
-                                   nullptr);
-            }
-            if (resource.object != nullptr) {
-                vkDestroyImage(dev, static_cast<VkImage>(resource.object),
-                               nullptr);
-            }
-            if (resource.object2 != nullptr) {
-                vkFreeMemory(dev,
-                             static_cast<VkDeviceMemory>(resource.object2),
-                             nullptr);
-            }
-            break;
-        case Kind::Shader:
-            if (resource.object != nullptr) {
-                vkDestroyShaderModule(dev,
-                                      static_cast<VkShaderModule>(resource.object),
-                                      nullptr);
-            }
-            break;
-        case Kind::Pipeline:
-            if (resource.object != nullptr) {
-                vkDestroyPipeline(dev, static_cast<VkPipeline>(resource.object),
-                                  nullptr);
-            }
-            break;
+    case Kind::Buffer:
+        if (resource.object != nullptr) {
+            vkDestroyBuffer(dev, static_cast<VkBuffer>(resource.object), nullptr);
+        }
+        if (resource.object2 != nullptr) {
+            vkFreeMemory(dev, static_cast<VkDeviceMemory>(resource.object2), nullptr);
+        }
+        break;
+    case Kind::Texture:
+        if (resource.object3 != nullptr) {
+            vkDestroyImageView(dev, static_cast<VkImageView>(resource.object3), nullptr);
+        }
+        if (resource.object != nullptr) {
+            vkDestroyImage(dev, static_cast<VkImage>(resource.object), nullptr);
+        }
+        if (resource.object2 != nullptr) {
+            vkFreeMemory(dev, static_cast<VkDeviceMemory>(resource.object2), nullptr);
+        }
+        break;
+    case Kind::Shader:
+        if (resource.object != nullptr) {
+            vkDestroyShaderModule(dev, static_cast<VkShaderModule>(resource.object), nullptr);
+        }
+        break;
+    case Kind::Pipeline:
+        if (resource.object != nullptr) {
+            vkDestroyPipeline(dev, static_cast<VkPipeline>(resource.object), nullptr);
+        }
+        break;
     }
     resource.object = resource.object2 = resource.object3 = nullptr;
 }
@@ -273,21 +275,18 @@ bool VulkanRenderDevice::initialize() noexcept {
     if (initialized_) {
         return true;
     }
-    if (instance_ == nullptr || physical_device_ == nullptr ||
-        surface_ == nullptr) {
+    if (instance_ == nullptr || physical_device_ == nullptr || surface_ == nullptr) {
         return false;
     }
     glslang::InitializeProcess();
 
     // Queue family with graphics support.
     std::uint32_t family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        static_cast<VkPhysicalDevice>(physical_device_), &family_count,
-        nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(static_cast<VkPhysicalDevice>(physical_device_),
+                                             &family_count, nullptr);
     std::vector<VkQueueFamilyProperties> families(family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        static_cast<VkPhysicalDevice>(physical_device_), &family_count,
-        families.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(static_cast<VkPhysicalDevice>(physical_device_),
+                                             &family_count, families.data());
     std::uint32_t queue_family = UINT32_MAX;
     for (std::uint32_t i = 0; i < family_count; ++i) {
         if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
@@ -313,35 +312,36 @@ bool VulkanRenderDevice::initialize() noexcept {
     device_info.ppEnabledExtensionNames = device_extensions;
 
     VkDevice device = VK_NULL_HANDLE;
-    if (vkCreateDevice(static_cast<VkPhysicalDevice>(physical_device_),
-                       &device_info, nullptr, &device) != VK_SUCCESS) {
+    if (vkCreateDevice(static_cast<VkPhysicalDevice>(physical_device_), &device_info, nullptr,
+                       &device) != VK_SUCCESS) {
         glslang::FinalizeProcess();
         return false;
     }
     device_ = device;
-    vkGetDeviceQueue(device, queue_family, 0, &queue_);
+    VkQueue queue = VK_NULL_HANDLE;
+    vkGetDeviceQueue(device, queue_family, 0, &queue);
+    queue_ = queue;
 
-    VkCommandPoolCreateInfo pool_info{
-        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+    VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     pool_info.queueFamilyIndex = queue_family;
-    if (vkCreateCommandPool(device, &pool_info, nullptr, &command_pool_) !=
-        VK_SUCCESS) {
+    VkCommandPool command_pool = VK_NULL_HANDLE;
+    if (vkCreateCommandPool(device, &pool_info, nullptr, &command_pool) != VK_SUCCESS) {
         return false;
     }
+    command_pool_ = command_pool;
 
     // Pipeline layout: no descriptors, no push constants (uniforms arrive
     // with the camera seam extension, DEC-005).
-    VkPipelineLayoutCreateInfo layout_info{
-        VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    if (vkCreatePipelineLayout(device, &layout_info, nullptr,
-                               &pipeline_layout_) != VK_SUCCESS) {
+    VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    if (vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
         return false;
     }
+    pipeline_layout_ = pipeline_layout;
 
     VkPhysicalDeviceProperties props{};
-    vkGetPhysicalDeviceProperties(static_cast<VkPhysicalDevice>(physical_device_),
-                                  &props);
+    vkGetPhysicalDeviceProperties(static_cast<VkPhysicalDevice>(physical_device_), &props);
     device_name_ = props.deviceName;
     capabilities_.backend = GraphicsBackend::Vulkan;
     capabilities_.device_name = device_name_.c_str();
@@ -350,8 +350,7 @@ bool VulkanRenderDevice::initialize() noexcept {
         props.limits.maxStorageBufferRange > 0
             ? static_cast<std::uint64_t>(props.limits.maxStorageBufferRange)
             : (std::uint64_t{1} << 30);
-    capabilities_.supports_compute =
-        (props.limits.maxComputeWorkGroupCount[0] > 0);
+    capabilities_.supports_compute = (props.limits.maxComputeWorkGroupCount[0] > 0);
     capabilities_.supports_wireframe = true;
     capabilities_.supports_shader_reload = true;
 
@@ -360,21 +359,18 @@ bool VulkanRenderDevice::initialize() noexcept {
     return true;
 }
 
-Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
-                                                      std::uint32_t height) {
+Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width, std::uint32_t height) {
     auto* dev = static_cast<VkDevice>(device_);
     auto* surf = static_cast<VkSurfaceKHR>(surface_);
     auto* phys = static_cast<VkPhysicalDevice>(physical_device_);
 
     VkSurfaceCapabilitiesKHR caps{};
-    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phys, surf, &caps) !=
-        VK_SUCCESS) {
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(phys, surf, &caps) != VK_SUCCESS) {
         return Status::fail(ErrorCode::Internal,
                             "vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed");
     }
     if (caps.currentExtent.width == 0 || caps.currentExtent.height == 0) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "surface has zero extent");
+        return Status::fail(ErrorCode::FailedPrecondition, "surface has zero extent");
     }
     swapchain_extent_w_ = width != 0 ? width : caps.currentExtent.width;
     swapchain_extent_h_ = height != 0 ? height : caps.currentExtent.height;
@@ -388,16 +384,13 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
     std::uint32_t format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surf, &format_count, nullptr);
     std::vector<VkSurfaceFormatKHR> formats(format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surf, &format_count,
-                                         formats.data());
-    VkSurfaceFormatKHR chosen = formats.empty()
-                                    ? VkSurfaceFormatKHR{
-                                          VK_FORMAT_B8G8R8A8_UNORM,
-                                          VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}
-                                    : formats[0];
+    vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surf, &format_count, formats.data());
+    VkSurfaceFormatKHR chosen =
+        formats.empty()
+            ? VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}
+            : formats[0];
     for (const auto& f : formats) {
-        if (f.format == VK_FORMAT_B8G8R8A8_UNORM ||
-            f.format == VK_FORMAT_R8G8B8A8_UNORM) {
+        if (f.format == VK_FORMAT_B8G8R8A8_UNORM || f.format == VK_FORMAT_R8G8B8A8_UNORM) {
             chosen = f;
             break;
         }
@@ -409,8 +402,7 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
         image_count = caps.maxImageCount;
     }
 
-    VkSwapchainCreateInfoKHR sci{
-        VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+    VkSwapchainCreateInfoKHR sci{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     sci.surface = surf;
     sci.minImageCount = image_count;
     sci.imageFormat = chosen.format;
@@ -464,13 +456,13 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
     VkSubpassDependency dep{};
     dep.srcSubpass = VK_SUBPASS_EXTERNAL;
     dep.dstSubpass = 0;
-    dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep.srcStageMask =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dep.dstStageMask =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dep.srcAccessMask = 0;
-    dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dep.dstAccessMask =
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     VkRenderPassCreateInfo rp_info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
     rp_info.attachmentCount = 2;
     rp_info.pAttachments = attachments;
@@ -479,8 +471,7 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
     rp_info.dependencyCount = 1;
     rp_info.pDependencies = &dep;
     VkRenderPass render_pass = VK_NULL_HANDLE;
-    if (vkCreateRenderPass(dev, &rp_info, nullptr, &render_pass) !=
-        VK_SUCCESS) {
+    if (vkCreateRenderPass(dev, &rp_info, nullptr, &render_pass) != VK_SUCCESS) {
         return Status::fail(ErrorCode::Internal, "vkCreateRenderPass failed");
     }
     render_pass_ = render_pass;
@@ -504,10 +495,8 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
         depth_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         depth_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         depth_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        if (vkCreateImage(dev, &depth_info, nullptr, &depth_image) !=
-            VK_SUCCESS) {
-            return Status::fail(ErrorCode::ResourceExhausted,
-                                "vkCreateImage(depth) failed");
+        if (vkCreateImage(dev, &depth_info, nullptr, &depth_image) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::ResourceExhausted, "vkCreateImage(depth) failed");
         }
         VkMemoryRequirements req{};
         vkGetImageMemoryRequirements(dev, depth_image, &req);
@@ -516,8 +505,7 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
         std::uint32_t mem_type = UINT32_MAX;
         for (std::uint32_t t = 0; t < mem.memoryTypeCount; ++t) {
             if ((req.memoryTypeBits & (1u << t)) != 0 &&
-                (mem.memoryTypes[t].propertyFlags &
-                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) {
+                (mem.memoryTypes[t].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) {
                 mem_type = t;
                 break;
             }
@@ -531,44 +519,35 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
         VkDeviceMemory depth_mem = VK_NULL_HANDLE;
         if (vkAllocateMemory(dev, &alloc, nullptr, &depth_mem) != VK_SUCCESS ||
             vkBindImageMemory(dev, depth_image, depth_mem, 0) != VK_SUCCESS) {
-            return Status::fail(ErrorCode::ResourceExhausted,
-                                "depth memory allocation failed");
+            return Status::fail(ErrorCode::ResourceExhausted, "depth memory allocation failed");
         }
         // Store depth image+memory inside the framebuffer attachment slot is
         // not possible; keep them alive via a side vector on the device.
         // (Tracked in depth_objects_; see below.)
         depth_images_.push_back({depth_image, depth_mem});
-        VkImageViewCreateInfo view_info{
-            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = depth_image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = VK_FORMAT_D32_SFLOAT;
         view_info.subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
         VkImageView depth_view = VK_NULL_HANDLE;
-        if (vkCreateImageView(dev, &view_info, nullptr, &depth_view) !=
-            VK_SUCCESS) {
-            return Status::fail(ErrorCode::Internal,
-                                "vkCreateImageView(depth) failed");
+        if (vkCreateImageView(dev, &view_info, nullptr, &depth_view) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "vkCreateImageView(depth) failed");
         }
         depth_views_.push_back(depth_view);
 
         VkImageView color_view = VK_NULL_HANDLE;
-        VkImageViewCreateInfo color_view_info{
-            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        VkImageViewCreateInfo color_view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         color_view_info.image = images[i];
         color_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         color_view_info.format = chosen.format;
-        color_view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0,
-                                            1};
-        if (vkCreateImageView(dev, &color_view_info, nullptr, &color_view) !=
-            VK_SUCCESS) {
-            return Status::fail(ErrorCode::Internal,
-                                "vkCreateImageView(color) failed");
+        color_view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        if (vkCreateImageView(dev, &color_view_info, nullptr, &color_view) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "vkCreateImageView(color) failed");
         }
         color_views_.push_back(color_view);
 
-        VkFramebufferCreateInfo fb_info{
-            VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        VkFramebufferCreateInfo fb_info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
         VkImageView fb_views[2] = {color_view, depth_view};
         fb_info.renderPass = render_pass;
         fb_info.attachmentCount = 2;
@@ -578,47 +557,49 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width,
         fb_info.layers = 1;
         VkFramebuffer fb = VK_NULL_HANDLE;
         if (vkCreateFramebuffer(dev, &fb_info, nullptr, &fb) != VK_SUCCESS) {
-            return Status::fail(ErrorCode::Internal,
-                                "vkCreateFramebuffer failed");
+            return Status::fail(ErrorCode::Internal, "vkCreateFramebuffer failed");
         }
         slot.framebuffer = fb;
+    }
 
-        VkCommandBufferAllocateInfo cb_info{
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        cb_info.commandPool = static_cast<VkCommandPool>(command_pool_);
-        cb_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cb_info.commandBufferCount = 1;
+    // Frame-in-flight slots: command buffer + fence + semaphores each.
+    // Count matches swapchain images so every image can be in flight once.
+    frame_slots_.clear();
+    frame_slots_.resize(actual_count);
+    VkCommandBufferAllocateInfo cb_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+    cb_info.commandPool = static_cast<VkCommandPool>(command_pool_);
+    cb_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cb_info.commandBufferCount = 1;
+    VkFenceCreateInfo fence_info{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    VkSemaphoreCreateInfo sem_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    for (std::uint32_t i = 0; i < actual_count; ++i) {
+        FrameSlot& fs = frame_slots_[i];
         VkCommandBuffer cb = VK_NULL_HANDLE;
         if (vkAllocateCommandBuffers(dev, &cb_info, &cb) != VK_SUCCESS) {
-            return Status::fail(ErrorCode::Internal,
-                                "vkAllocateCommandBuffers failed");
+            return Status::fail(ErrorCode::Internal, "vkAllocateCommandBuffers failed");
         }
-        slot.command_buffer = cb;
-
-        VkFenceCreateInfo fence_info{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-        fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        fs.command_buffer = cb;
         VkFence fence = VK_NULL_HANDLE;
         if (vkCreateFence(dev, &fence_info, nullptr, &fence) != VK_SUCCESS) {
-            return Status::fail(ErrorCode::ResourceExhausted,
-                                "vkCreateFence failed");
+            return Status::fail(ErrorCode::ResourceExhausted, "vkCreateFence failed");
         }
-        slot.fence = fence;
-
-        VkSemaphoreCreateInfo sem_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        fs.fence = fence;
         VkSemaphore acq = VK_NULL_HANDLE;
         VkSemaphore rnd = VK_NULL_HANDLE;
         if (vkCreateSemaphore(dev, &sem_info, nullptr, &acq) != VK_SUCCESS ||
             vkCreateSemaphore(dev, &sem_info, nullptr, &rnd) != VK_SUCCESS) {
-            return Status::fail(ErrorCode::ResourceExhausted,
-                                "vkCreateSemaphore failed");
+            return Status::fail(ErrorCode::ResourceExhausted, "vkCreateSemaphore failed");
         }
-        slot.acquire_sem = acq;
-        slot.render_sem = rnd;
+        fs.acquire_sem = acq;
+        fs.render_sem = rnd;
     }
     return Status::success();
 }
 
-const char* VulkanRenderDevice::name() const noexcept { return "vulkan"; }
+const char* VulkanRenderDevice::name() const noexcept {
+    return "vulkan";
+}
 
 GraphicsBackend VulkanRenderDevice::backend() const noexcept {
     return GraphicsBackend::Vulkan;
@@ -633,22 +614,18 @@ bool VulkanRenderDevice::available() const noexcept {
 }
 
 bool VulkanRenderDevice::handle_live(RenderHandle handle) const noexcept {
-    return is_valid(handle) &&
-           static_cast<std::size_t>(handle.index) < resources_.size() &&
-           generations_[handle.index] == handle.generation &&
-           resources_[handle.index].alive;
+    return is_valid(handle) && static_cast<std::size_t>(handle.index) < resources_.size() &&
+           generations_[handle.index] == handle.generation && resources_[handle.index].alive;
 }
 
-VulkanRenderDevice::Resource* VulkanRenderDevice::find(HandleIndex index)
-    noexcept {
+VulkanRenderDevice::Resource* VulkanRenderDevice::find(HandleIndex index) noexcept {
     if (static_cast<std::size_t>(index) >= resources_.size()) {
         return nullptr;
     }
     return &resources_[index];
 }
 
-const VulkanRenderDevice::Resource* VulkanRenderDevice::find(
-    HandleIndex index) const noexcept {
+const VulkanRenderDevice::Resource* VulkanRenderDevice::find(HandleIndex index) const noexcept {
     if (static_cast<std::size_t>(index) >= resources_.size()) {
         return nullptr;
     }
@@ -674,21 +651,17 @@ HandleIndex VulkanRenderDevice::alloc_slot(Kind kind) {
 
 Status VulkanRenderDevice::require_frame() const {
     if (!initialized_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not initialized");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
     }
     if (!in_frame_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "no frame in progress");
+        return Status::fail(ErrorCode::FailedPrecondition, "no frame in progress");
     }
     return Status::success();
 }
 
-Status VulkanRenderDevice::fail_vk(const char* what,
-                                   std::int32_t result) const {
+Status VulkanRenderDevice::fail_vk(const char* what, std::int32_t result) const {
     return Status::fail(ErrorCode::Internal,
-                        std::string(what) + " failed (VkResult " +
-                            std::to_string(result) + ")");
+                        std::string(what) + " failed (VkResult " + std::to_string(result) + ")");
 }
 
 Result<RenderHandle> VulkanRenderDevice::create_buffer(const BufferDesc& desc) {
@@ -698,8 +671,7 @@ Result<RenderHandle> VulkanRenderDevice::create_buffer(const BufferDesc& desc) {
                                           "device is not initialized");
     }
     if (!valid(desc) || buffer_usage(desc.usage) == 0) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid buffer descriptor");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid buffer descriptor");
     }
     auto* dev = static_cast<VkDevice>(device_);
     auto* phys = static_cast<VkPhysicalDevice>(physical_device_);
@@ -709,8 +681,7 @@ Result<RenderHandle> VulkanRenderDevice::create_buffer(const BufferDesc& desc) {
     info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VkBuffer buffer = VK_NULL_HANDLE;
     if (vkCreateBuffer(dev, &info, nullptr, &buffer) != VK_SUCCESS) {
-        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted,
-                                          "vkCreateBuffer failed");
+        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted, "vkCreateBuffer failed");
     }
     VkMemoryRequirements req{};
     vkGetBufferMemoryRequirements(dev, buffer, &req);
@@ -720,19 +691,16 @@ Result<RenderHandle> VulkanRenderDevice::create_buffer(const BufferDesc& desc) {
     for (std::uint32_t t = 0; t < mem.memoryTypeCount; ++t) {
         if ((req.memoryTypeBits & (1u << t)) != 0 &&
             (mem.memoryTypes[t].propertyFlags &
-             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
-                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
+                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
             mem_type = t;
             break;
         }
     }
     if (mem_type == UINT32_MAX) {
         vkDestroyBuffer(dev, buffer, nullptr);
-        return Result<RenderHandle>::fail(
-            ErrorCode::ResourceExhausted,
-            "no host-visible coherent memory for buffer");
+        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted,
+                                          "no host-visible coherent memory for buffer");
     }
     VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     alloc.allocationSize = req.size;
@@ -752,22 +720,19 @@ Result<RenderHandle> VulkanRenderDevice::create_buffer(const BufferDesc& desc) {
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
 }
 
-Result<RenderHandle> VulkanRenderDevice::create_texture(
-    const TextureDesc& desc) {
+Result<RenderHandle> VulkanRenderDevice::create_texture(const TextureDesc& desc) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!initialized_) {
         return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition,
                                           "device is not initialized");
     }
     if (!valid(desc) || desc.depth != 1 || desc.array_layers != 1) {
-        return Result<RenderHandle>::fail(
-            ErrorCode::InvalidArgument,
-            "only 2D non-array textures are supported");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
+                                          "only 2D non-array textures are supported");
     }
     const VkFormat format = vk_format(desc.format);
     if (format == VK_FORMAT_UNDEFINED) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "unsupported pixel format");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "unsupported pixel format");
     }
     auto* dev = static_cast<VkDevice>(device_);
     auto* phys = static_cast<VkPhysicalDevice>(physical_device_);
@@ -783,8 +748,7 @@ Result<RenderHandle> VulkanRenderDevice::create_texture(
     info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     VkImage image = VK_NULL_HANDLE;
     if (vkCreateImage(dev, &info, nullptr, &image) != VK_SUCCESS) {
-        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted,
-                                          "vkCreateImage failed");
+        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted, "vkCreateImage failed");
     }
     VkMemoryRequirements req{};
     vkGetImageMemoryRequirements(dev, image, &req);
@@ -793,8 +757,7 @@ Result<RenderHandle> VulkanRenderDevice::create_texture(
     std::uint32_t mem_type = UINT32_MAX;
     for (std::uint32_t t = 0; t < mem.memoryTypeCount; ++t) {
         if ((req.memoryTypeBits & (1u << t)) != 0 &&
-            (mem.memoryTypes[t].propertyFlags &
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) {
+            (mem.memoryTypes[t].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) {
             mem_type = t;
             break;
         }
@@ -812,19 +775,16 @@ Result<RenderHandle> VulkanRenderDevice::create_texture(
         return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted,
                                           "texture memory allocation failed");
     }
-    VkImageViewCreateInfo view_info{
-        VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_info.image = image;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = format;
-    view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0,
-                                  desc.mip_levels, 0, 1};
+    view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.mip_levels, 0, 1};
     VkImageView view = VK_NULL_HANDLE;
     if (vkCreateImageView(dev, &view_info, nullptr, &view) != VK_SUCCESS) {
         vkDestroyImage(dev, image, nullptr);
         vkFreeMemory(dev, memory, nullptr);
-        return Result<RenderHandle>::fail(ErrorCode::Internal,
-                                          "vkCreateImageView failed");
+        return Result<RenderHandle>::fail(ErrorCode::Internal, "vkCreateImageView failed");
     }
     const HandleIndex index = alloc_slot(Kind::Texture);
     auto& resource = resources_[index];
@@ -842,8 +802,7 @@ Result<RenderHandle> VulkanRenderDevice::create_shader(const ShaderDesc& desc) {
                                           "device is not initialized");
     }
     if (!valid(desc)) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid shader descriptor");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid shader descriptor");
     }
     std::string source(desc.source);
     std::vector<std::uint32_t> spirv;
@@ -853,8 +812,7 @@ Result<RenderHandle> VulkanRenderDevice::create_shader(const ShaderDesc& desc) {
                                           "glslang compile failed: " + log);
     }
     auto* dev = static_cast<VkDevice>(device_);
-    VkShaderModuleCreateInfo info{
-        VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = spirv.size() * sizeof(std::uint32_t);
     info.pCode = spirv.data();
     VkShaderModule module = VK_NULL_HANDLE;
@@ -869,47 +827,36 @@ Result<RenderHandle> VulkanRenderDevice::create_shader(const ShaderDesc& desc) {
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
 }
 
-Result<RenderHandle> VulkanRenderDevice::create_pipeline(
-    const PipelineDesc& desc) {
+Result<RenderHandle> VulkanRenderDevice::create_pipeline(const PipelineDesc& desc) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!initialized_) {
         return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition,
                                           "device is not initialized");
     }
     if (!valid(desc.layout)) {
-        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument,
-                                          "invalid vertex layout");
+        return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid vertex layout");
     }
-    const Resource* vs = handle_live(desc.vertex_shader)
-                             ? find(desc.vertex_shader.index)
-                             : nullptr;
-    const Resource* fs = handle_live(desc.fragment_shader)
-                             ? find(desc.fragment_shader.index)
-                             : nullptr;
-    if (vs == nullptr || fs == nullptr || vs->kind != Kind::Shader ||
-        fs->kind != Kind::Shader || vs->spirv.empty() || fs->spirv.empty()) {
-        return Result<RenderHandle>::fail(ErrorCode::NotFound,
-                                          "shader handles are not live");
+    const Resource* vs = handle_live(desc.vertex_shader) ? find(desc.vertex_shader.index) : nullptr;
+    const Resource* fs =
+        handle_live(desc.fragment_shader) ? find(desc.fragment_shader.index) : nullptr;
+    if (vs == nullptr || fs == nullptr || vs->kind != Kind::Shader || fs->kind != Kind::Shader ||
+        vs->spirv.empty() || fs->spirv.empty()) {
+        return Result<RenderHandle>::fail(ErrorCode::NotFound, "shader handles are not live");
     }
     auto* dev = static_cast<VkDevice>(device_);
 
-    VkShaderModuleCreateInfo mod_info{
-        VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    VkShaderModuleCreateInfo mod_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     VkPipelineShaderStageCreateInfo stages[2]{};
     VkShaderModule modules[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
     for (int i = 0; i < 2; ++i) {
         const Resource* shader = i == 0 ? vs : fs;
         mod_info.codeSize = shader->spirv.size() * sizeof(std::uint32_t);
         mod_info.pCode = shader->spirv.data();
-        if (vkCreateShaderModule(dev, &mod_info, nullptr, &modules[i]) !=
-            VK_SUCCESS) {
-            return Result<RenderHandle>::fail(ErrorCode::Internal,
-                                              "vkCreateShaderModule failed");
+        if (vkCreateShaderModule(dev, &mod_info, nullptr, &modules[i]) != VK_SUCCESS) {
+            return Result<RenderHandle>::fail(ErrorCode::Internal, "vkCreateShaderModule failed");
         }
-        stages[i].sType =
-            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[i].stage = i == 0 ? VK_SHADER_STAGE_VERTEX_BIT
-                                 : VK_SHADER_STAGE_FRAGMENT_BIT;
+        stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[i].stage = i == 0 ? VK_SHADER_STAGE_VERTEX_BIT : VK_SHADER_STAGE_FRAGMENT_BIT;
         stages[i].module = modules[i];
         stages[i].pName = "main";
     }
@@ -931,8 +878,7 @@ Result<RenderHandle> VulkanRenderDevice::create_pipeline(
     }
     VkPipelineVertexInputStateCreateInfo vertex_input{
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    vertex_input.vertexBindingDescriptionCount =
-        desc.layout.attribute_count > 0 ? 1 : 0;
+    vertex_input.vertexBindingDescriptionCount = desc.layout.attribute_count > 0 ? 1 : 0;
     vertex_input.pVertexBindingDescriptions = &binding;
     vertex_input.vertexAttributeDescriptionCount = desc.layout.attribute_count;
     vertex_input.pVertexAttributeDescriptions = attribs;
@@ -968,21 +914,19 @@ Result<RenderHandle> VulkanRenderDevice::create_pipeline(
 
     VkPipelineColorBlendAttachmentState blend{};
     blend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     VkPipelineColorBlendStateCreateInfo blend_state{
         VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
     blend_state.attachmentCount = 1;
     blend_state.pAttachments = &blend;
 
-    const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                             VK_DYNAMIC_STATE_SCISSOR};
+    const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic_state{
         VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     dynamic_state.dynamicStateCount = 2;
     dynamic_state.pDynamicStates = dynamic_states;
 
-    VkGraphicsPipelineCreateInfo gp{
-        VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    VkGraphicsPipelineCreateInfo gp{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     gp.stageCount = 2;
     gp.pStages = stages;
     gp.pVertexInputState = &vertex_input;
@@ -999,13 +943,11 @@ Result<RenderHandle> VulkanRenderDevice::create_pipeline(
 
     VkPipeline pipeline = VK_NULL_HANDLE;
     const VkResult result =
-        vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gp, nullptr,
-                                  &pipeline);
+        vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gp, nullptr, &pipeline);
     vkDestroyShaderModule(dev, modules[0], nullptr);
     vkDestroyShaderModule(dev, modules[1], nullptr);
     if (result != VK_SUCCESS) {
-        return Status::fail(ErrorCode::Internal,
-                            "vkCreateGraphicsPipelines failed");
+        return Result<RenderHandle>::fail(ErrorCode::Internal, "vkCreateGraphicsPipelines failed");
     }
     const HandleIndex index = alloc_slot(Kind::Pipeline);
     auto& resource = resources_[index];
@@ -1022,8 +964,7 @@ Result<RenderHandle> VulkanRenderDevice::create_pipeline(
 Status VulkanRenderDevice::destroy(RenderHandle handle) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!initialized_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not initialized");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
     }
     if (!handle_live(handle)) {
         return Status::fail(ErrorCode::NotFound, "handle is not live");
@@ -1036,34 +977,28 @@ Status VulkanRenderDevice::destroy(RenderHandle handle) {
     return Status::success();
 }
 
-Status VulkanRenderDevice::update_buffer(RenderHandle handle,
-                                         std::span<const std::byte> data,
+Status VulkanRenderDevice::update_buffer(RenderHandle handle, std::span<const std::byte> data,
                                          std::uint64_t offset_bytes) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!initialized_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not initialized");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
     }
     if (!handle_live(handle)) {
         return Status::fail(ErrorCode::NotFound, "buffer handle is not live");
     }
     auto* resource = find(handle.index);
     if (resource->kind != Kind::Buffer) {
-        return Status::fail(ErrorCode::InvalidArgument,
-                            "handle is not a buffer");
+        return Status::fail(ErrorCode::InvalidArgument, "handle is not a buffer");
     }
     if (data.empty() || offset_bytes > resource->aux ||
         data.size() > resource->aux - offset_bytes) {
-        return Status::fail(ErrorCode::OutOfRange,
-                            "buffer update is out of range");
+        return Status::fail(ErrorCode::OutOfRange, "buffer update is out of range");
     }
     auto* dev = static_cast<VkDevice>(device_);
     void* mapped = nullptr;
-    if (vkMapMemory(dev,
-                    static_cast<VkDeviceMemory>(resource->object2),
-                    static_cast<VkDeviceSize>(offset_bytes),
-                    static_cast<VkDeviceSize>(data.size()), 0, &mapped) !=
-        VK_SUCCESS) {
+    if (vkMapMemory(dev, static_cast<VkDeviceMemory>(resource->object2),
+                    static_cast<VkDeviceSize>(offset_bytes), static_cast<VkDeviceSize>(data.size()),
+                    0, &mapped) != VK_SUCCESS) {
         return Status::fail(ErrorCode::Internal, "vkMapMemory failed");
     }
     std::memcpy(mapped, data.data(), data.size());
@@ -1071,48 +1006,44 @@ Status VulkanRenderDevice::update_buffer(RenderHandle handle,
     return Status::success();
 }
 
-Status VulkanRenderDevice::acquire_image(SwapImage*& out) {
+Status VulkanRenderDevice::acquire_image() {
     auto* dev = static_cast<VkDevice>(device_);
-    auto* slot = &swap_images_[image_index_];
+    FrameSlot& slot = frame_slots_[frame_slot_ % frame_slots_.size()];
+    // Wait for this slot's previous submission before reusing it; this also
+    // guarantees its semaphores have been fully consumed.
+    if (slot.fence_submitted) {
+        vkWaitForFences(dev, 1, reinterpret_cast<VkFence*>(&slot.fence), VK_TRUE,
+                        std::numeric_limits<std::uint64_t>::max());
+    }
+    vkResetFences(dev, 1, reinterpret_cast<VkFence*>(&slot.fence));
+    vkResetCommandBuffer(static_cast<VkCommandBuffer>(slot.command_buffer), 0);
     const VkResult result = vkAcquireNextImageKHR(
-        dev, static_cast<VkSwapchainKHR>(swapchain_),
-        std::numeric_limits<std::uint64_t>::max(),
-        static_cast<VkSemaphore>(slot->acquire_sem), VK_NULL_HANDLE,
-        &image_index_);
+        dev, static_cast<VkSwapchainKHR>(swapchain_), std::numeric_limits<std::uint64_t>::max(),
+        static_cast<VkSemaphore>(slot.acquire_sem), VK_NULL_HANDLE, &image_index_);
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "swapchain out of date");
+        return Status::fail(ErrorCode::FailedPrecondition, "swapchain out of date");
     }
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         return fail_vk("vkAcquireNextImageKHR", static_cast<std::int32_t>(result));
     }
-    slot = &swap_images_[image_index_];
-    // Wait for the previous submission using this image to finish.
-    vkWaitForFences(dev, 1, reinterpret_cast<VkFence*>(&slot->fence), VK_TRUE,
-                   std::numeric_limits<std::uint64_t>::max());
-    vkResetFences(dev, 1, reinterpret_cast<VkFence*>(&slot->fence));
-    vkResetCommandBuffer(static_cast<VkCommandBuffer>(slot->command_buffer), 0);
-    out = slot;
+    ++frame_slot_;
     return Status::success();
 }
 
 Status VulkanRenderDevice::begin_frame() {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!initialized_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not initialized");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
     }
     if (in_frame_) {
-        return Status::fail(ErrorCode::AlreadyExists,
-                            "frame already in progress");
+        return Status::fail(ErrorCode::AlreadyExists, "frame already in progress");
     }
     if (swap_images_.empty() || swapchain_ == nullptr) {
         return Status::fail(ErrorCode::FailedPrecondition,
                             "no swapchain (call recreate_swapchain)");
     }
     image_index_ = 0;
-    SwapImage* slot = nullptr;
-    const Status status = acquire_image(slot);
+    const Status status = acquire_image();
     if (!status.ok()) {
         return status;
     }
@@ -1135,9 +1066,9 @@ Status VulkanRenderDevice::record_draws_into_pass() {
     if (pass_open_) {
         return Status::success();
     }
-    auto* dev = static_cast<VkDevice>(device_);
-    SwapImage* slot = &swap_images_[image_index_];
-    auto* cb = static_cast<VkCommandBuffer>(slot->command_buffer);
+    const SwapImage& image = swap_images_[image_index_];
+    FrameSlot& slot = frame_slots_[(frame_slot_ - 1) % frame_slots_.size()];
+    auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (vkBeginCommandBuffer(cb, &begin) != VK_SUCCESS) {
@@ -1149,18 +1080,20 @@ Status VulkanRenderDevice::record_draws_into_pass() {
     clears[0].color.float32[2] = pending_clear_.b;
     clears[0].color.float32[3] = pending_clear_.a;
     clears[1].depthStencil = {pending_clear_.depth, pending_clear_.stencil};
-    VkRenderPassBeginInfo rp_begin{
-        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    VkRenderPassBeginInfo rp_begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     rp_begin.renderPass = static_cast<VkRenderPass>(render_pass_);
-    rp_begin.framebuffer = static_cast<VkFramebuffer>(slot->framebuffer);
+    rp_begin.framebuffer = static_cast<VkFramebuffer>(image.framebuffer);
     rp_begin.renderArea = {{0, 0}, {swapchain_extent_w_, swapchain_extent_h_}};
     rp_begin.clearValueCount = 2;
     rp_begin.pClearValues = clears;
     vkCmdBeginRenderPass(cb, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
 
-    VkViewport viewport{0.0f, 0.0f,
+    VkViewport viewport{0.0f,
+                        0.0f,
                         static_cast<float>(swapchain_extent_w_),
-                        static_cast<float>(swapchain_extent_h_), 0.0f, 1.0f};
+                        static_cast<float>(swapchain_extent_h_),
+                        0.0f,
+                        1.0f};
     VkRect2D scissor{{0, 0}, {swapchain_extent_w_, swapchain_extent_h_}};
     vkCmdSetViewport(cb, 0, 1, &viewport);
     vkCmdSetScissor(cb, 0, 1, &scissor);
@@ -1180,28 +1113,22 @@ Status VulkanRenderDevice::draw(const DrawCall& call) {
     const auto* pipeline = find(call.pipeline.index);
     const auto* vertices = find(call.vertex_buffer.index);
     const auto* indices = find(call.index_buffer.index);
-    if (pipeline == nullptr || pipeline->kind != Kind::Pipeline ||
-        !handle_live(call.pipeline)) {
+    if (pipeline == nullptr || pipeline->kind != Kind::Pipeline || !handle_live(call.pipeline)) {
         return Status::fail(ErrorCode::NotFound, "pipeline handle is not live");
     }
-    if (vertices == nullptr || vertices->kind != Kind::Buffer ||
-        !handle_live(call.vertex_buffer)) {
-        return Status::fail(ErrorCode::NotFound,
-                            "vertex buffer handle is not live");
+    if (vertices == nullptr || vertices->kind != Kind::Buffer || !handle_live(call.vertex_buffer)) {
+        return Status::fail(ErrorCode::NotFound, "vertex buffer handle is not live");
     }
     if (call.index_count > 0 &&
-        (indices == nullptr || indices->kind != Kind::Buffer ||
-         !handle_live(call.index_buffer))) {
-        return Status::fail(ErrorCode::NotFound,
-                            "index buffer handle is not live");
+        (indices == nullptr || indices->kind != Kind::Buffer || !handle_live(call.index_buffer))) {
+        return Status::fail(ErrorCode::NotFound, "index buffer handle is not live");
     }
     const Status pass_status = record_draws_into_pass();
     if (!pass_status.ok()) {
         return pass_status;
     }
-    auto* dev = static_cast<VkDevice>(device_);
-    SwapImage* slot = &swap_images_[image_index_];
-    auto* cb = static_cast<VkCommandBuffer>(slot->command_buffer);
+    FrameSlot& slot = frame_slots_[(frame_slot_ - 1) % frame_slots_.size()];
+    auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
     vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       static_cast<VkPipeline>(pipeline->object));
     const VkDeviceSize offset = 0;
@@ -1223,9 +1150,8 @@ Status VulkanRenderDevice::end_frame() {
     if (!status.ok()) {
         return status;
     }
-    SwapImage* slot = &swap_images_[image_index_];
-    auto* dev = static_cast<VkDevice>(device_);
-    auto* cb = static_cast<VkCommandBuffer>(slot->command_buffer);
+    FrameSlot& slot = frame_slots_[(frame_slot_ - 1) % frame_slots_.size()];
+    auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
     if (!pass_open_) {
         const Status pass_status = record_draws_into_pass();
         if (!pass_status.ok()) {
@@ -1240,22 +1166,23 @@ Status VulkanRenderDevice::end_frame() {
         return Status::fail(ErrorCode::Internal, "vkEndCommandBuffer failed");
     }
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    VkSemaphore wait_sem = static_cast<VkSemaphore>(slot->acquire_sem);
+    VkSemaphore wait_sem = static_cast<VkSemaphore>(slot.acquire_sem);
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     submit.waitSemaphoreCount = 1;
     submit.pWaitSemaphores = &wait_sem;
     submit.pWaitDstStageMask = &wait_stage;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cb;
-    VkSemaphore signal_sem = static_cast<VkSemaphore>(slot->render_sem);
+    VkSemaphore signal_sem = static_cast<VkSemaphore>(slot.render_sem);
     submit.signalSemaphoreCount = 1;
     submit.pSignalSemaphores = &signal_sem;
-    VkFence fence = static_cast<VkFence>(slot->fence);
-    if (vkQueueSubmit(queue_, 1, &submit, fence) != VK_SUCCESS) {
+    VkFence fence = static_cast<VkFence>(slot.fence);
+    const VkQueue queue = static_cast<VkQueue>(queue_);
+    if (vkQueueSubmit(queue, 1, &submit, fence) != VK_SUCCESS) {
         in_frame_ = false;
         return Status::fail(ErrorCode::Internal, "vkQueueSubmit failed");
     }
-    slot->fence_submitted = true;
+    slot.fence_submitted = true;
     VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     present.waitSemaphoreCount = 1;
     present.pWaitSemaphores = &signal_sem;
@@ -1263,11 +1190,10 @@ Status VulkanRenderDevice::end_frame() {
     present.swapchainCount = 1;
     present.pSwapchains = &swapchain;
     present.pImageIndices = &image_index_;
-    const VkResult pres = vkQueuePresentKHR(queue_, &present);
+    const VkResult pres = vkQueuePresentKHR(queue, &present);
     in_frame_ = false;
     if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "swapchain out of date");
+        return Status::fail(ErrorCode::FailedPrecondition, "swapchain out of date");
     }
     if (pres != VK_SUCCESS) {
         return fail_vk("vkQueuePresentKHR", static_cast<std::int32_t>(pres));
@@ -1282,40 +1208,40 @@ void VulkanRenderDevice::wait_idle() {
     }
 }
 
-bool VulkanRenderDevice::device_lost() const noexcept { return lost_; }
+bool VulkanRenderDevice::device_lost() const noexcept {
+    return lost_;
+}
 
 Status VulkanRenderDevice::recover_from_device_loss() {
     if (!lost_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not lost");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not lost");
     }
     lost_ = false;
-    return Status::fail(ErrorCode::Unimplemented,
-                        "Vulkan device-loss recovery not implemented");
+    return Status::fail(ErrorCode::Unimplemented, "Vulkan device-loss recovery not implemented");
 }
 
-Status VulkanRenderDevice::recreate_swapchain(std::uint32_t width,
-                                              std::uint32_t height) {
+Status VulkanRenderDevice::recreate_swapchain(std::uint32_t width, std::uint32_t height) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!initialized_) {
-        return Status::fail(ErrorCode::FailedPrecondition,
-                            "device is not initialized");
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
     }
-    wait_idle();
+    // mutex_ is already held; idle directly rather than via wait_idle().
+    vkDeviceWaitIdle(static_cast<VkDevice>(device_));
     // Tear down per-image objects, then rebuild.
     auto* dev = static_cast<VkDevice>(device_);
-    for (auto& slot : swap_images_) {
-        auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
-        auto* fb = static_cast<VkFramebuffer>(slot.framebuffer);
-        auto* fence = static_cast<VkFence>(slot.fence);
-        auto* acq = static_cast<VkSemaphore>(slot.acquire_sem);
-        auto* rnd = static_cast<VkSemaphore>(slot.render_sem);
+    for (auto& image : swap_images_) {
+        auto* fb = static_cast<VkFramebuffer>(image.framebuffer);
         if (fb != nullptr) {
             vkDestroyFramebuffer(dev, fb, nullptr);
         }
+    }
+    for (auto& slot : frame_slots_) {
+        auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
+        auto* fence = static_cast<VkFence>(slot.fence);
+        auto* acq = static_cast<VkSemaphore>(slot.acquire_sem);
+        auto* rnd = static_cast<VkSemaphore>(slot.render_sem);
         if (cb != nullptr) {
-            vkFreeCommandBuffers(dev, static_cast<VkCommandPool>(command_pool_),
-                                 1, &cb);
+            vkFreeCommandBuffers(dev, static_cast<VkCommandPool>(command_pool_), 1, &cb);
         }
         if (fence != nullptr) {
             vkDestroyFence(dev, fence, nullptr);
@@ -1328,30 +1254,35 @@ Status VulkanRenderDevice::recreate_swapchain(std::uint32_t width,
         }
     }
     for (auto view : color_views_) {
-        vkDestroyImageView(dev, view, nullptr);
+        vkDestroyImageView(dev, static_cast<VkImageView>(view), nullptr);
     }
     for (auto view : depth_views_) {
-        vkDestroyImageView(dev, view, nullptr);
+        vkDestroyImageView(dev, static_cast<VkImageView>(view), nullptr);
     }
     for (auto& pair : depth_images_) {
-        vkDestroyImage(dev, pair.first, nullptr);
-        vkFreeMemory(dev, pair.second, nullptr);
+        vkDestroyImage(dev, static_cast<VkImage>(pair.image), nullptr);
+        vkFreeMemory(dev, static_cast<VkDeviceMemory>(pair.memory), nullptr);
     }
     color_views_.clear();
     depth_views_.clear();
     depth_images_.clear();
     swap_images_.clear();
+    frame_slots_.clear();
+    frame_slot_ = 0;
+    image_index_ = ~0u;
     if (render_pass_ != nullptr) {
-        vkDestroyRenderPass(dev, static_cast<VkRenderPass>(render_pass_),
-                            nullptr);
+        vkDestroyRenderPass(dev, static_cast<VkRenderPass>(render_pass_), nullptr);
         render_pass_ = nullptr;
     }
     if (swapchain_ != nullptr) {
-        vkDestroySwapchainKHR(dev, static_cast<VkSwapchainKHR>(swapchain_),
-                              nullptr);
+        vkDestroySwapchainKHR(dev, static_cast<VkSwapchainKHR>(swapchain_), nullptr);
         swapchain_ = nullptr;
     }
     return create_swapchain_resources(width, height);
 }
 
-}  // namespace poko
+} // namespace poko
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif

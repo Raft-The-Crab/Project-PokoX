@@ -21,8 +21,7 @@ class VulkanRenderDevice final : public api::IRenderDevice {
 public:
     // surface must be a valid VkSurfaceKHR created for the target window.
     // The device does not take ownership of the surface.
-    VulkanRenderDevice(void* instance, void* physical_device,
-                       void* surface);
+    VulkanRenderDevice(void* instance, void* physical_device, void* surface);
     ~VulkanRenderDevice() override;
 
     VulkanRenderDevice(const VulkanRenderDevice&) = delete;
@@ -61,34 +60,41 @@ private:
     struct Resource {
         Kind kind = Kind::Buffer;
         bool alive = false;
-        std::uint64_t aux = 0;  // buffer size / pipeline program bits
+        std::uint64_t aux = 0; // buffer size / pipeline program bits
         // Vulkan object handles (cast from void* to keep headers out).
-        void* object = nullptr;   // VkBuffer / VkImage / VkShaderModule / VkPipeline
-        void* object2 = nullptr;  // VkDeviceMemory (buffer/texture)
-        void* object3 = nullptr;  // VkImageView (texture)
-        std::vector<std::uint32_t> spirv;  // shader stage only
-        VertexLayout layout{};             // pipeline only
+        void* object = nullptr;           // VkBuffer / VkImage / VkShaderModule / VkPipeline
+        void* object2 = nullptr;          // VkDeviceMemory (buffer/texture)
+        void* object3 = nullptr;          // VkImageView (texture)
+        std::vector<std::uint32_t> spirv; // shader stage only
+        VertexLayout layout{};            // pipeline only
         CullMode cull_mode = CullMode::Back;
         CompareOp depth_compare = CompareOp::LessOrEqual;
         bool depth_test = true;
         bool depth_write = true;
         PrimitiveTopology topology = PrimitiveTopology::Triangles;
-        std::uint32_t format = 0;  // texture pixel format
+        std::uint32_t format = 0; // texture pixel format
     };
 
     struct DepthImage {
-        void* image = nullptr;   // VkImage
-        void* memory = nullptr;  // VkDeviceMemory
+        void* image = nullptr;  // VkImage
+        void* memory = nullptr; // VkDeviceMemory
     };
 
-    struct SwapImage {
-        void* image = nullptr;          // VkImage
-        void* framebuffer = nullptr;    // VkFramebuffer
+    // Per-frame-in-flight submission state. Semaphores and fences belong to
+    // the frame slot, not the swapchain image, because vkAcquireNextImageKHR
+    // can return any image — the acquire semaphore must be chosen before the
+    // image index is known.
+    struct FrameSlot {
         void* command_buffer = nullptr; // VkCommandBuffer
         void* fence = nullptr;          // VkFence (submit completion)
         void* acquire_sem = nullptr;    // VkSemaphore (image available)
         void* render_sem = nullptr;     // VkSemaphore (render finished)
         bool fence_submitted = false;
+    };
+
+    struct SwapImage {
+        void* image = nullptr;       // VkImage
+        void* framebuffer = nullptr; // VkFramebuffer
     };
 
     bool handle_live(RenderHandle handle) const noexcept;
@@ -101,29 +107,30 @@ private:
 
     Status create_instance_resources();
     Status create_device_resources();
-    Status create_swapchain_resources(std::uint32_t width,
-                                      std::uint32_t height);
+    Status create_swapchain_resources(std::uint32_t width, std::uint32_t height);
     Status create_render_pass_resources();
-    Status acquire_image(SwapImage*& out);
+    Status acquire_image();
     Status record_draws_into_pass();
 
-    void* instance_ = nullptr;         // VkInstance
-    void* physical_device_ = nullptr;  // VkPhysicalDevice (borrowed)
-    void* device_ = nullptr;           // VkDevice
-    void* queue_ = nullptr;            // VkQueue
-    void* surface_ = nullptr;          // VkSurfaceKHR (borrowed)
-    void* command_pool_ = nullptr;     // VkCommandPool
-    void* render_pass_ = nullptr;      // VkRenderPass
-    void* swapchain_ = nullptr;        // VkSwapchainKHR
-    void* pipeline_layout_ = nullptr;  // VkPipelineLayout
+    void* instance_ = nullptr;        // VkInstance
+    void* physical_device_ = nullptr; // VkPhysicalDevice (borrowed)
+    void* device_ = nullptr;          // VkDevice
+    void* queue_ = nullptr;           // VkQueue
+    void* surface_ = nullptr;         // VkSurfaceKHR (borrowed)
+    void* command_pool_ = nullptr;    // VkCommandPool
+    void* render_pass_ = nullptr;     // VkRenderPass
+    void* swapchain_ = nullptr;       // VkSwapchainKHR
+    void* pipeline_layout_ = nullptr; // VkPipelineLayout
     std::uint32_t swapchain_format_ = 0;
     std::uint32_t swapchain_extent_w_ = 0;
     std::uint32_t swapchain_extent_h_ = 0;
     std::vector<SwapImage> swap_images_;
+    std::vector<FrameSlot> frame_slots_;
     std::vector<DepthImage> depth_images_;
-    std::vector<void*> color_views_;  // VkImageView
-    std::vector<void*> depth_views_;  // VkImageView
+    std::vector<void*> color_views_; // VkImageView
+    std::vector<void*> depth_views_; // VkImageView
     std::uint32_t image_index_ = ~0u;
+    std::uint32_t frame_slot_ = 0;
     bool pass_open_ = false;
     ClearValue pending_clear_{};
     bool initialized_ = false;
@@ -137,4 +144,4 @@ private:
     mutable std::mutex mutex_;
 };
 
-}  // namespace poko
+} // namespace poko
