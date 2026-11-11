@@ -15,14 +15,15 @@ each interface.
 ## Early interface seams
 
 Declared as boundary types in `engine/core/include/poko_api_seams.h`. Phase 0
-declared them as `STUB` placeholders; Phase 1 gives the two engine-core-owned
-interfaces real signatures and implementations. The rest remain `STUB`.
+declared them as `STUB` placeholders; Phase 1 gives the engine-core- and
+renderer-owned interfaces real signatures and implementations. The rest remain
+`STUB`.
 
 | Interface | Owning subsystem | Phase | Boundary rule |
 |---|---|---|---|
 | `IPlatformFileSystem` | engine core / platform abstraction | 1 (implemented) | root-scoped `LocalFileSystem`, traversal rejected |
 | `IJobSystem` | engine core | 1 (implemented) | `JobSystem` thread pool, exceptions contained |
-| `IRenderDevice` | renderer | 1 | Vulkan primary, OpenGL fallback |
+| `IRenderDevice` | renderer | 1 (implemented, MOCK backend) | POD contracts in core, `NullRenderDevice` (MOCK); Vulkan/OpenGL backends pending pinning |
 | `IAssetProvider` | asset pipeline | 1 | async loading, handles, caching |
 | `IPhysicsWorld` | physics | 1 | custom physics, documented determinism |
 | `IAudioDevice` | audio | 1 | miniaudio behind a Poko interface |
@@ -44,9 +45,9 @@ interfaces real signatures and implementations. The rest remain `STUB`.
 - Final UI consumes stable application APIs and does not own business rules.
 
 Enforced mechanically by: `poko_core` links no graphics, backend or UI
-vendors; the two implemented seams live behind Poko-owned interfaces; the
-`Server` configuration excludes windowed targets; and
-`POKO_FETCH_DEPENDENCIES` is `OFF`.
+vendors; render contracts in core are POD-only descriptors; implemented seams
+live behind Poko-owned interfaces; the `Server` configuration excludes the
+renderer and windowed targets; and `POKO_FETCH_DEPENDENCIES` is `OFF`.
 
 ## Core types (`engine/core`)
 

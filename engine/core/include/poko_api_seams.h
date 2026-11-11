@@ -2,15 +2,19 @@
 
 // Early interface seams from systemplan/01_SYSTEM_DEPENDENCY_MAP.md.
 //
-// Phase 0 declared these as boundary placeholders (STUB). Phase 1 starts
-// filling in the signatures owned by engine core. Interfaces owned by later
+// Phase 0 declared these as boundary placeholders (STUB). Phase 1 fills in the
+// signatures owned by engine core and the renderer. Interfaces owned by later
 // subsystems remain STUB declarations with only a virtual destructor. No seam
-// may pull graphics, backend or UI dependencies into engine core.
+// may pull graphics, backend or UI vendor dependencies into engine core; the
+// render contracts below are POD-only descriptors.
 
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
+
+#include "poko_render_contracts.h"
+#include "poko_result.h"
 
 namespace poko::api {
 
@@ -32,11 +36,36 @@ public:
     virtual void wait_idle() = 0;
 };
 
-// STUB declarations — owned by later subsystems (systemplan/01, 27).
+// Phase 1 (renderer): the render-device boundary. Concrete backends live in
+// engine/renderer/; a MOCK NullRenderDevice implements it for offline tests.
+// Engine core only sees these signatures, never a graphics vendor.
 class IRenderDevice {
 public:
     virtual ~IRenderDevice() = default;
+
+    virtual const char* name() const noexcept = 0;
+    virtual GraphicsBackend backend() const noexcept = 0;
+    virtual DeviceCapabilities capabilities() const noexcept = 0;
+    virtual bool available() const noexcept = 0;
+
+    virtual Result<RenderHandle> create_buffer(const BufferDesc& desc) = 0;
+    virtual Result<RenderHandle> create_texture(const TextureDesc& desc) = 0;
+    virtual Result<RenderHandle> create_shader(const ShaderDesc& desc) = 0;
+    virtual Result<RenderHandle> create_pipeline(const PipelineDesc& desc) = 0;
+    virtual Status destroy(RenderHandle handle) = 0;
+
+    virtual Status begin_frame() = 0;
+    virtual Status clear(const ClearValue& value) = 0;
+    virtual Status draw(const DrawCall& call) = 0;
+    virtual Status end_frame() = 0;
+    virtual void wait_idle() = 0;
+
+    // systemplan/04 step 10: fallback, device-loss and resource failure.
+    virtual bool device_lost() const noexcept = 0;
+    virtual Status recover_from_device_loss() = 0;
 };
+
+// STUB declarations — owned by later subsystems (systemplan/01, 27).
 
 class IAssetProvider {
 public:

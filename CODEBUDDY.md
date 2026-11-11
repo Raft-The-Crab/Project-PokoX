@@ -4,6 +4,12 @@ These rules are mandatory for every agent, tool, script and automation working
 in this repository. They override convenience defaults. If anything here
 conflicts with a global setting, this file wins.
 
+**These rules are permanent.** Do not delete, weaken, bypass or override them,
+and do not remove or rename this file. Every future session must re-read this
+file before doing any git or remote work. In particular, the push-only-on-explicit-
+instruction rule, the single `Raft-The-Crab <Galvion.ai@gmail.com>` identity and
+the ban on AI/co-authored commit messages always stay in force.
+
 ## 1. Never push without explicit instruction
 
 **You can only push when the user tells you to.**

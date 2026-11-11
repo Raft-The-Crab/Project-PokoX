@@ -9,10 +9,26 @@ set(_poko_unit_sources
     core_diagnostics_settings_ownership_test.cpp
     core_platform_fs_test.cpp)
 
+# The renderer is excluded from the headless Server configuration, so its
+# tests are conditional on the target existing.
+if(TARGET poko_renderer)
+    list(APPEND _poko_unit_sources
+        renderer_contracts_test.cpp
+        renderer_null_device_test.cpp
+        renderer_shader_cache_test.cpp
+        renderer_camera_test.cpp
+        renderer_submission_test.cpp
+        renderer_frame_stats_facade_test.cpp)
+endif()
+
 foreach(_poko_src IN LISTS _poko_unit_sources)
     get_filename_component(_poko_name "${_poko_src}" NAME_WE)
     add_executable(poko_test_${_poko_name} ${_poko_src})
     target_link_libraries(poko_test_${_poko_name} PRIVATE poko_core poko_platform)
+    if(TARGET poko_renderer)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE
+            poko_renderer poko_render_null)
+    endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
     poko_apply_common(poko_test_${_poko_name})

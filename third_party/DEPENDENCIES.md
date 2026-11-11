@@ -49,6 +49,14 @@ them before implementation (`masterplan/README.md`).
 
 ## Current build
 
-`poko_core`, the CLI tools, the demos and the test harness use only the C++20
-standard library. `tests/harness/poko_test_harness.h` avoids a third-party test
-framework until one is pinned above.
+`poko_core`, `poko_platform`, `poko_renderer`, `poko_render_null`, the CLI
+tools, the demos and the test harness use only the C++20 standard library.
+`tests/harness/poko_test_harness.h` avoids a third-party test framework until
+one is pinned above.
+
+**Renderer note (`DEC-003`):** `systemplan/04` currently uses a labelled MOCK
+`NullRenderDevice` and no graphics library. The `poko_windowed_demo` remains a
+STUB. Opening a real window requires pinning SDL2, Vulkan headers/loader and an
+OpenGL loader (plus Diligent Engine if selected) with verified licences and
+hashes, then adding `FetchContent` entries behind `POKO_FETCH_DEPENDENCIES`.
+Until that happens no renderer row above changes status.

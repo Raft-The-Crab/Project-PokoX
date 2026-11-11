@@ -65,22 +65,26 @@ bash scripts/build/verify_all.sh
 |---|---|---|
 | `poko_core` | `PRODUCTION` | version, build config, IDs, results, math, clocks, events, jobs, diagnostics, settings, ownership, logging, assertions |
 | `poko_platform` | `LOCAL_DEV` | root-scoped `LocalFileSystem` implementing `IPlatformFileSystem` |
-| `poko_api_seams` | interface | interface seams from `systemplan/01` (two implemented, rest STUB) |
+| `poko_renderer` | `PRODUCTION` | shader cache, camera, scene batching, frame stats, `Renderer` facade |
+| `poko_render_null` | `MOCK` | test-only `NullRenderDevice` implementing `IRenderDevice` |
+| `poko_api_seams` | interface | interface seams from `systemplan/01` (three implemented, rest STUB) |
 | `poko_headless` | `LOCAL_DEV` | runnable headless demo (exit gate) |
+| `poko_render_demo` | `LOCAL_DEV` | console renderer test scene using the MOCK device |
 | `poko_windowed_demo` | `STUB` | windowed demo placeholder until SDL2/Vulkan are pinned |
 | `poko_assetc` | `STUB` | asset compiler CLI |
 | `poko_packagec` | `STUB` | `.pk`/`.pkx`/`.pkxx` package builder |
 | `poko_verifier` | `STUB` | package signature/manifest verifier |
 | `poko_serverctl` | `STUB` | dedicated server diagnostics CLI |
 | `poko_server` | `STUB` | shared headless dedicated server runtime |
-| `poko_test_*` | `LOCAL_DEV` | nine unit-test executables registered with CTest |
+| `poko_test_*` | `LOCAL_DEV` | unit-test executables registered with CTest (15 outside Server) |
 
 `STUB`, `LOCAL_DEV`, `MOCK` and `PRODUCTION` are the implementation labels from
 `systemplan/00`. Labels are compiled into each binary (`POKO_IMPL_LABEL`) and
-can be seen with `--version`, so a stub cannot be mistaken for production.
-`MOCK` is unused in Phase 0.
+can be seen with `--version`, so a stub cannot be mistaken for production. The
+MOCK backend is a separate library and is never selected implicitly.
 
-The `Server` configuration is headless: `poko_windowed_demo` is not built and
+The `Server` configuration is headless: neither the renderer nor the windowed
+demo is built, and
 `POKO_HEADLESS` is defined. `POKO_DEV_TOOLS` exists only in `Debug` and
 `Development`, keeping debug UI out of release builds.
 

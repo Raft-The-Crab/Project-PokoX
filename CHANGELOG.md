@@ -65,6 +65,19 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
   headless console demo now exercises all core subsystems.
 - `engine/core/docs/api.md` documenting core APIs, ownership and thread-safety
   contracts, and `docs/decisions/0002-phase1-engine-core.md`.
+- Phase 1 renderer foundations (`systemplan/04`): POD render contracts and a
+  full `api::IRenderDevice` seam in `poko_api_seams.h`; `poko_renderer`
+  (`ShaderCache`, `Camera`, `SceneSubmission`, `FrameStats`, `Renderer` facade)
+  and a separate `poko_render_null` MOCK device with generation-checked
+  handles, command recording, device-loss simulation and recovery. Backend
+  order recorded as Vulkan -> OpenGL -> Null.
+- `poko_render_demo` console test scene; renderer excluded from the headless
+  `Server` configuration; `FrameStats::dump_to_log()` gated by
+  `POKO_DEV_TOOLS`.
+- Six renderer CTest unit-test executables covering contracts, the MOCK device,
+  shader cache determinism, camera math, batching and frame stats/facade.
+- `engine/renderer/docs/api.md`, `docs/decisions/0003-phase1-renderer-foundations.md`
+  and a renderer note in `third_party/DEPENDENCIES.md`.
 
 ### Changed
 
