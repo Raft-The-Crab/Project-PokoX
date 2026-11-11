@@ -25,6 +25,9 @@ private_keys/
 /build/
 out/
 cmake-build-*/
+Testing/
+_deps/
+CMakeUserPresets.json
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake

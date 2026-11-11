@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://pokox.invalid/schemas/manifest-draft-0.1.json",
+  "title": "PokoX package manifest (DRAFT 0.1)",
+  "$comment": "Stage 0 DRAFT. Not implemented by any runtime. See docs/architecture/package_manifest_draft.md and systemplan/13. Requires owner approval before use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "format_version",
+    "game_id",
+    "release_id",
+    "runtime_compatibility",
+    "created_utc"
+  ],
+  "properties": {
+    "format": {
+      "type": "string",
+      "enum": ["pk", "pkx", "pkxx"]
+    },
+    "format_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "game_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,64}$"
+    },
+    "release_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,64}$",
+      "description": "Immutable identifier for this exact release"
+    },
+    "package_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,64}$"
+    },
+    "runtime_compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_runtime", "max_runtime"],
+      "properties": {
+        "min_runtime": { "type": "string" },
+        "max_runtime": { "type": "string" }
+      }
+    },
+    "mute_version": { "type": "string" },
+    "platforms": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["windows", "android", "linux", "macos"] },
+      "uniqueItems": true
+    },
+    "networking_modes": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["offline", "player_hosted", "dedicated"] },
+      "uniqueItems": true
+    },
+    "content_labels": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "Declared service capabilities; enforced at runtime"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "hash": { "type": "string" }
+        }
+      }
+    },
+    "entry_points": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "client": { "type": "string" },
+        "server": { "type": "string" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Sizes, counts and quotas; all values are upper bounds",
+      "properties": {
+        "max_package_bytes": { "type": "integer", "minimum": 1 },
+        "max_file_count": { "type": "integer", "minimum": 1 },
+        "max_compression_ratio": { "type": "number", "exclusiveMinimum": 0 },
+        "max_path_length": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "type": "string" },
+        "manifest": { "type": "string" },
+        "assets": { "type": "string" }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference only. Signing private keys remain server-side.",
+      "properties": {
+        "key_id": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    },
+    "created_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": { "type": "string" }
+  }
+}

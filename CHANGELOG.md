@@ -27,6 +27,33 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
   `sdk/`, `docs/`, `tests/`, `third_party/`, `scripts/`, `config/`,
   `profiles/`, `ci/`, `examples/`, `benchmarks/`, `ops/`, `security/`,
   `localization/`, `labs/` and `.github/`.
+- Stage 0 / Phase 0 build foundation: root `CMakeLists.txt` (C++20),
+  `CMakePresets.json` and the `config/cmake/` modules with four distinct
+  configurations (`Debug`, `Development`, `Release`, headless `Server`).
+- `poko_core` foundation: version, build-config constants, stable IDs and
+  handles, structured logging with a capturable sink, and assertions that
+  compile away in release/server builds.
+- `STUB` declarations of the early interface seams from `systemplan/01`.
+- Buildable targets from `systemplan/02`: headless demo, windowed demo stub,
+  `poko_assetc`, `poko_packagec`, `poko_verifier`, `poko_serverctl` and
+  `poko_server`, all carrying explicit implementation labels.
+- Dependency-free unit-test harness and four CTest-registered unit test
+  executables covering version, types, logging and assertions.
+- `.github/workflows/ci.yml` with a four-configuration build/test matrix on
+  Windows and Ubuntu, an advisory formatting/static-analysis job, and a
+  secrets policy check; `.clang-format` and `.clang-tidy` configurations.
+- `scripts/build/verify_all.sh` for reproducible local verification.
+- Design and register drafts: `docs/guides/building.md`,
+  `docs/architecture/core_api_and_security_design.md`,
+  `docs/architecture/package_manifest_draft.md`,
+  `packages/schema/manifest.schema.json`,
+  `third_party/DEPENDENCIES.md`, `third_party/licenses/INVENTORY.md` and
+  `docs/decisions/0001-phase0-build-foundation.md`.
+
+### Changed
+
+- Recorded `main` as the default branch in `CODEBUDDY.md` and
+  `CONTRIBUTING.md`.
 
 ### Notes
 

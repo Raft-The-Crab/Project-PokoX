@@ -1,0 +1,88 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "POKO_BUILD_TESTS": "ON",
+        "POKO_BUILD_TOOLS": "ON",
+        "POKO_BUILD_DEMOS": "ON",
+        "POKO_BUILD_SERVER": "ON",
+        "POKO_FETCH_DEPENDENCIES": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "displayName": "Debug",
+      "description": "No optimisation, asserts on, dev tools on",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "development",
+      "inherits": "base",
+      "displayName": "Development",
+      "description": "Light optimisation, asserts on, dev tools on, profiling on",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Development"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release",
+      "description": "Full optimisation, asserts and dev tools off",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "server",
+      "inherits": "base",
+      "displayName": "Server",
+      "description": "Headless: no graphics, audio or player UI",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Server"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "development", "configurePreset": "development" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "server", "configurePreset": "server" }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "development",
+      "configurePreset": "development",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "server",
+      "configurePreset": "server",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
