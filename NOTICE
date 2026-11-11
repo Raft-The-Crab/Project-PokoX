@@ -1,0 +1,36 @@
+PokoX
+Copyright (c) 2026 Raft-The-Crab. All rights reserved.
+
+This product is proprietary and closed source. See LICENSE for the full terms.
+
+--------------------------------------------------------------------------------
+Attribution
+--------------------------------------------------------------------------------
+PokoX, Poko Studio, Poko Mod, PokoX Player, Poko Community, Pokoins, MUTE,
+Poko Game Passport and Poko Dedicated Server Runtime are names and marks
+associated with PokoX. No license to use them is granted by this repository.
+
+--------------------------------------------------------------------------------
+Third-party software
+--------------------------------------------------------------------------------
+PokoX is planned to use third-party libraries and ecosystems, including (but
+not limited to) SDL2, GLM, miniaudio, Asio, Zstandard (Zstd), glTF, Vulkan,
+OpenGL, Diligent Engine, Dear ImGui (development builds only), CMake, Rust +
+egui, Kotlin/Android, Cloudflare Workers, Firebase Authentication, PostgreSQL
+and Valkey.
+
+Each third-party component remains the property of its respective owners and
+is subject to its own license. License texts, copyright notices and required
+attributions must be preserved. Vendored copies and their notices belong in
+third_party/ with the inventory in third_party/licenses/ and the software bill
+of materials in security/sbom/.
+
+Verify library licenses, platform support and maintenance status before any
+release. Do not remove legally required notices or imply that third-party code
+is original PokoX code.
+
+--------------------------------------------------------------------------------
+Contact
+--------------------------------------------------------------------------------
+Raft-The-Crab
+Galvion.ai@gmail.com

@@ -1,0 +1,80 @@
+PROPRIETARY LICENSE
+
+Copyright (c) 2026 Raft-The-Crab. All rights reserved.
+
+PokoX is proprietary, closed-source software. This repository and its contents
+are not open source, and no license under any open-source or free-software
+license (including but not limited to the MIT, Apache-2.0, GPL, BSD or MPL
+licenses) is granted, implied or otherwise applicable.
+
+--------------------------------------------------------------------------------
+1. NO GRANT OF RIGHTS
+--------------------------------------------------------------------------------
+Unless you have a separate, written and signed agreement with Raft-The-Crab
+explicitly granting such rights, you are NOT permitted to:
+
+  - use, copy, reproduce or distribute this software or any part of it;
+  - modify, adapt, translate, reverse engineer, decompile or disassemble it;
+  - create derivative works based on it;
+  - sublicense, rent, lease, sell, publish or otherwise make it available to
+    any third party;
+  - use the PokoX name, logos, trademarks or branding;
+  - use this software to build, host or operate a competing service.
+
+Any viewing of this repository is for evaluation and reference purposes only.
+
+--------------------------------------------------------------------------------
+2. OWNERSHIP
+--------------------------------------------------------------------------------
+All right, title and interest in and to PokoX, including all source code,
+assets, documentation, formats (.pk, .pkx, .pkxx), specifications, the MUTE
+language, designs, trademarks and associated intellectual property, remain the
+exclusive property of Raft-The-Crab. No ownership is transferred by access to
+this repository.
+
+--------------------------------------------------------------------------------
+3. CONFIDENTIALITY
+--------------------------------------------------------------------------------
+This repository may contain unpublished plans, architecture, security designs
+and internal specifications. You must not disclose, publish or share them
+without prior written permission from Raft-The-Crab.
+
+--------------------------------------------------------------------------------
+4. THIRD-PARTY COMPONENTS
+--------------------------------------------------------------------------------
+Third-party software, libraries, fonts, assets and content that may be vendored
+under third_party/ or referenced by the build remain subject to their own
+respective licenses and notices. Nothing in this license alters those terms.
+Third-party license texts and notices must be preserved. See third_party/ and
+NOTICE for details.
+
+--------------------------------------------------------------------------------
+5. CONTRIBUTIONS
+--------------------------------------------------------------------------------
+Contributions are accepted only from explicitly authorised contributors under
+the terms set out in CONTRIBUTING.md. All contributions are assigned to
+Raft-The-Crab. Do not submit code, assets or content unless you have been
+authorised to do so and have the right to assign it.
+
+--------------------------------------------------------------------------------
+6. NO WARRANTY
+--------------------------------------------------------------------------------
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. TO THE MAXIMUM
+EXTENT PERMITTED BY LAW, IN NO EVENT SHALL RAFT-THE-CRAB BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+7. CONTACT
+--------------------------------------------------------------------------------
+For licensing enquiries or written permission requests:
+
+    Raft-The-Crab
+    Galvion.ai@gmail.com
+
+--------------------------------------------------------------------------------
+Nothing in this file constitutes legal advice. This is a planning-stage
+repository; validate legal requirements before any public release.

@@ -1,0 +1,131 @@
+# ==========================================================================
+# PokoX — root .gitignore
+# Multi-language monorepo: C++20 / CMake, Rust, Kotlin/Android,
+# TypeScript/Node, Go, Python tooling.
+# ==========================================================================
+
+# --- Secrets (never commit) ------------------------------------------------
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+/secrets/
+credentials*
+!credentials.example
+service-account*.json
+.signing/
+private_keys/
+
+# --- C++ / CMake -----------------------------------------------------------
+/build/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.idb
+*.exp
+*.gch
+*.pch
+*.d
+*.gcda
+*.gcno
+*.gcov
+
+# --- Rust ------------------------------------------------------------------
+target/
+Cargo.lock.bak
+**/*.rs.bk
+
+# --- Kotlin / Android / Gradle ---------------------------------------------
+.gradle/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+captures/
+.externalNativeBuild/
+.cxx/
+
+# --- Node / TypeScript -----------------------------------------------------
+node_modules/
+.wrangler/
+.dev.vars
+dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Go --------------------------------------------------------------------
+*.test
+*.out
+vendor/bin/
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# --- IDE / editors ---------------------------------------------------------
+.idea/
+.vs/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Tooling / caches / artifacts ------------------------------------------
+.cache/
+.ccache/
+.sccache/
+.clangd/
+compile_commands/
+artifacts/
+*.log
+logs/
+coverage/
+*.profraw
+*.profdata
+benchmark_results/
+tmp/
+temp/
+
+# --- Generated packages & runtime data -------------------------------------
+# PokoX package formats are source/build inputs; ignore extracted caches only.
+*.pkx.tmp
+*.pkxx.tmp
+extracted/
+package_cache/
+crash_dumps/
+*.dmp
+
+# --- Keep scaffold placeholders --------------------------------------------
+# .gitkeep files are intentionally tracked so empty scaffold dirs survive.
+!.gitkeep
+!**/.gitkeep
