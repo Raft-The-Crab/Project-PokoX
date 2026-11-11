@@ -39,6 +39,10 @@ These rules are authoritative. See also [CODEBUDDY.md](CODEBUDDY.md).
    keys, tokens, `.env` files or production data in the repository, clients,
    game packages or developer-hosted game files.
 
+5. **Default branch.** `main` is the repository default (and the GitHub
+   default). Branch from and target `main`; `master` is not used. Remote:
+   `https://github.com/Raft-The-Crab/Project-PokoX.git`.
+
 ## Development philosophy
 
 PokoX follows a **system-first, sequential subsystem completion** model: build
@@ -106,7 +110,7 @@ engine core and excluded from release builds.
 
 ## Workflow
 
-- Work on a feature branch; keep changes scoped to one subsystem.
+- Work on a feature branch off `main`; keep changes scoped to one subsystem.
 - Write tests alongside implementation (unit, integration, contract, fuzz where
   relevant). Security-sensitive changes need a threat-model review.
 - Update the relevant `systemplan/` or `masterplan/` document and the decision

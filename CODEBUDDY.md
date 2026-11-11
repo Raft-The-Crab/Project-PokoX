@@ -18,6 +18,8 @@ conflicts with a global setting, this file wins.
   push, leave the changes local and say so.
 - A past instruction to push does not carry over to a later turn or a later
   task. Authorisation is scoped to the request that gave it.
+- When a push is authorised, target `main` or the intended feature branch.
+  Never push to `master`; that branch does not exist.
 
 ## 2. Always use the owner's account
 
@@ -54,6 +56,8 @@ in section 2.
 - **License:** Proprietary, closed source (see `LICENSE`). This is NOT an
   open-source repository.
 - **Remote:** `https://github.com/Raft-The-Crab/Project-PokoX.git`
+- **Default branch:** `main` (also set as the GitHub default branch). Branch
+  from and target `main`; never create, push to, or rename back to `master`.
 - **Development model:** system-first, sequential subsystem completion
   (`systemplan/`); deferred final UI; ImGui/CLI tooling for development only.
 - **Planning docs:** `masterplan/` (product) and `systemplan/` (engineering)
