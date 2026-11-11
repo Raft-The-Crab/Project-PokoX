@@ -12,6 +12,10 @@ option(POKO_RENDER_OPENGL
     "Build the OpenGL render device and the real windowed demo (requires POKO_FETCH_DEPENDENCIES=ON)"
     OFF)
 
+option(POKO_RENDER_VULKAN
+    "Build the Vulkan render device (requires POKO_FETCH_DEPENDENCIES=ON)"
+    OFF)
+
 if(POKO_FETCH_DEPENDENCIES)
     message(STATUS
         "Third-party fetch: ON — only revisions pinned in "
@@ -48,6 +52,53 @@ if(POKO_RENDER_OPENGL)
         URL_HASH "SHA256=e6a9c4e75de8fe719f922dddc208627f77754a502909f457a1355981f20c21e0"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
     FetchContent_MakeAvailable(SDL3)
+endif()
+
+# ---------------------------------------------------------------------------
+# Vulkan — primary renderer backend (systemplan/04, DEC-005). Headers,
+# loader and glslang (GLSL -> SPIR-V) are pinned to the vulkan-sdk-1.4.363.0
+# tag, fetched as SHA-256-verified tarballs.
+# ---------------------------------------------------------------------------
+if(POKO_RENDER_VULKAN)
+    if(NOT POKO_FETCH_DEPENDENCIES)
+        message(FATAL_ERROR
+            "POKO_RENDER_VULKAN=ON requires POKO_FETCH_DEPENDENCIES=ON. "
+            "Pinned Vulkan dependencies must be fetched explicitly; refusing "
+            "to build a graphics backend in an offline configuration.")
+    endif()
+
+    # SDL3 provides the window surface (SDL_Vulkan_*); Vulkan needs it.
+    if(NOT TARGET SDL3::SDL3)
+        message(FATAL_ERROR
+            "POKO_RENDER_VULKAN requires SDL3 for surface creation; "
+            "enable POKO_RENDER_OPENGL or add an SDL3 surface provider.")
+    endif()
+
+    include(FetchContent)
+    set(VULKAN_HEADERS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    set(VULKAN_HEADERS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(VulkanHeaders
+        URL "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/6802bb4733b63ed5efd3adb308a6c885ef180ea1"
+        URL_HASH "SHA256=9044fbb356160e43201dc2094acb44c8a906722a63a35f48fc0f051579db9bb6"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    FetchContent_MakeAvailable(VulkanHeaders)
+
+    set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(BUILD_WERROR OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(VulkanLoader
+        URL "https://codeload.github.com/KhronosGroup/Vulkan-Loader/tar.gz/fa218055ff4948b159f31d43f800c808a13d51df"
+        URL_HASH "SHA256=ae107edcf183b6fc9d6dbd4f8b78bd3e1c08dbc6168b86e55244e614acdfeb27"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    FetchContent_MakeAvailable(VulkanLoader)
+
+    set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+    set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(glslang
+        URL "https://codeload.github.com/KhronosGroup/glslang/tar.gz/e1b562a8bed273a02f30b59b66a5d499793cede5"
+        URL_HASH "SHA256=907174a24713c6202c146f164bf81783f1fbc79c8cb821a30f18f159eb980312"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    FetchContent_MakeAvailable(glslang)
 endif()
 
 # Guard used by subsystem CMakeLists: a dependency must be documented and

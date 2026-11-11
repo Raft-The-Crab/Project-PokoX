@@ -11,7 +11,9 @@ materials is tracked in `security/sbom/` once dependencies are pinned.
 |---|---|---|---|---|
 | SDL3 | zlib — verified against `release-3.4.20` (`f00dc91`) | yes — `SDL3-LICENSE.txt` | done 2026-11-12 | PINNED (fetched only when `POKO_FETCH_DEPENDENCIES=ON`) |
 | gl3w | The Unlicense (public domain) — verified at `372e391` | yes — `gl3w-UNLICENSE.txt` | done 2026-11-12 | VENDORED (`third_party/vendored/gl3w/`) |
-| Vulkan headers / loader | Apache-2.0 / MIT (unverified) | no | required | NOT VENDORED |
+| Vulkan-Headers | Apache-2.0 — verified at `6802bb4` | yes — `Vulkan-Headers-LICENSE.md` + `Vulkan-Headers-LICENSES/` | done 2026-11-12 | PINNED (fetched only when `POKO_RENDER_VULKAN=ON`) |
+| Vulkan-Loader | Apache-2.0 — verified at `fa21805` | yes — `Vulkan-Loader-LICENSE.txt` + `Vulkan-Loader-LICENSES/` | done 2026-11-12 | PINNED (fetched only when `POKO_RENDER_VULKAN=ON`) |
+| glslang | BSD-3-Clause — verified at `e1b562a` | yes — `glslang-LICENSE.txt` + `glslang-LICENSES/` | done 2026-11-12 | PINNED (fetched only when `POKO_RENDER_VULKAN=ON`) |
 | Diligent Engine | Apache-2.0 (unverified) | no | required | NOT VENDORED |
 | GLM | MIT (unverified) | no | required | NOT VENDORED |
 | miniaudio | public domain / MIT (unverified) | no | required | NOT VENDORED |

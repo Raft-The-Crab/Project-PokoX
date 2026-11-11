@@ -11,6 +11,20 @@ if(TARGET poko_render_gl)
     # Automated smoke run: 60 frames then exit. Requires a GL 3.3 context, so
     # it only exists in opt-in graphics builds.
     add_test(NAME demo.windowed COMMAND poko_windowed_demo --frames 60)
+
+    if(TARGET poko_render_vulkan)
+        add_executable(poko_vulkan_demo vulkan_demo.cpp)
+        target_link_libraries(poko_vulkan_demo PRIVATE
+            poko_renderer poko_render_vulkan SDL3::SDL3 Vulkan::Headers)
+        if(TARGET Vulkan::VulkanLoader)
+            target_link_libraries(poko_vulkan_demo PRIVATE Vulkan::VulkanLoader)
+        elseif(TARGET vulkan)
+            target_link_libraries(poko_vulkan_demo PRIVATE vulkan)
+        endif()
+        poko_apply_common(poko_vulkan_demo)
+        poko_set_impl_label(poko_vulkan_demo LOCAL_DEV)
+        add_test(NAME demo.vulkan COMMAND poko_vulkan_demo --frames 60)
+    endif()
 else()
     add_executable(poko_windowed_demo main.cpp)
     target_link_libraries(poko_windowed_demo PRIVATE poko_core)

@@ -47,3 +47,26 @@ if(POKO_RENDER_OPENGL)
     poko_apply_common(poko_render_gl)
     poko_set_impl_label(poko_render_gl PRODUCTION)
 endif()
+
+# ---------------------------------------------------------------------------
+# Vulkan backend (DEC-005). Primary backend; requires POKO_RENDER_VULKAN=ON
+# (which requires POKO_FETCH_DEPENDENCIES=ON and SDL3 for surfaces).
+# ---------------------------------------------------------------------------
+if(POKO_RENDER_VULKAN)
+    add_library(poko_render_vulkan STATIC src/poko_vulkan_device.cpp)
+    target_include_directories(poko_render_vulkan PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    target_link_libraries(poko_render_vulkan PUBLIC
+        poko_core
+        Vulkan::Headers
+        glslang::glslang
+        glslang::SPIRV
+        SDL3::SDL3)
+    if(TARGET Vulkan::VulkanLoader)
+        target_link_libraries(poko_render_vulkan PUBLIC Vulkan::VulkanLoader)
+    elseif(TARGET vulkan)
+        target_link_libraries(poko_render_vulkan PUBLIC vulkan)
+    endif()
+    poko_apply_common(poko_render_vulkan)
+    poko_set_impl_label(poko_render_vulkan PRODUCTION)
+endif()

@@ -33,7 +33,9 @@ false record.
 |---|---|---|---|---|---|
 | SDL3 | windowing / input (`systemplan/04`, `07`) — replaces SDL2, which is EOL upstream (DEC-004) | `f00dc919ca35b9756316e86c4777392de442f9b2` (tag `release-3.4.20`) | SHA-256 `e6a9c4e75de8fe719f922dddc208627f77754a502909f457a1355981f20c21e0` (codeload tarball) | zlib — verified, `licenses/SDL3-LICENSE.txt` | PINNED (FetchContent, `POKO_RENDER_OPENGL`) |
 | gl3w | OpenGL core profile loader (`systemplan/04`) — generated sources vendored, see `vendored/gl3w/VENDORED.md` | `372e391702acac616e0fd32e3eaccf19d58b9626` | SHA-256 `2d9f0aa9716c3bbc262965ace6caaa1b901cdc37616dafad590cffb35bfc419d` (codeload tarball) | The Unlicense (public domain) — verified, `licenses/gl3w-UNLICENSE.txt` | VENDORED |
-| Vulkan headers / loader | primary renderer (`systemplan/04`) | TBD | TBD | Apache-2.0 / MIT (verify) | NOT VENDORED |
+| Vulkan-Headers | Vulkan API headers (`systemplan/04`) | `6802bb4733b63ed5efd3adb308a6c885ef180ea1` (tag `vulkan-sdk-1.4.363.0`) | SHA-256 `9044fbb356160e43201dc2094acb44c8a906722a63a35f48fc0f051579db9bb6` (codeload tarball) | Apache-2.0 — verified, `licenses/Vulkan-Headers-LICENSE.md` | PINNED (FetchContent, `POKO_RENDER_VULKAN`) |
+| Vulkan-Loader | Vulkan loader (`systemplan/04`) | `fa218055ff4948b159f31d43f800c808a13d51df` (tag `vulkan-sdk-1.4.363.0`) | SHA-256 `ae107edcf183b6fc9d6dbd4f8b78bd3e1c08dbc6168b86e55244e614acdfeb27` (codeload tarball) | Apache-2.0 — verified, `licenses/Vulkan-Loader-LICENSE.txt` | PINNED (FetchContent, `POKO_RENDER_VULKAN`) |
+| glslang | GLSL → SPIR-V for Vulkan shaders (`systemplan/04`) | `e1b562a8bed273a02f30b59b66a5d499793cede5` (tag `vulkan-sdk-1.4.363.0`) | SHA-256 `907174a24713c6202c146f164bf81783f1fbc79c8cb821a30f18f159eb980312` (codeload tarball) | BSD-3-Clause — verified, `licenses/glslang-LICENSE.txt` | PINNED (FetchContent, `POKO_RENDER_VULKAN`) |
 | Diligent Engine | rendering integration (`systemplan/29`) | TBD | TBD | Apache-2.0 (verify) | NOT VENDORED |
 | GLM | math (`masterplan/22`) | TBD | TBD | MIT (verify) | NOT VENDORED |
 | miniaudio | audio backend (`systemplan/07`) | TBD | TBD | public domain / MIT (verify) | NOT VENDORED |
