@@ -39,6 +39,7 @@ message(STATUS "PokoX ${PROJECT_VERSION} | config=${POKO_ACTIVE_CONFIG} | tests=
 add_subdirectory(engine/core)
 add_subdirectory(engine/platform_abstraction)
 add_subdirectory(engine/physics)
+add_subdirectory(engine/assets)
 
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)

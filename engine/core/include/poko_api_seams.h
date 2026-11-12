@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 
+#include "poko_asset_contracts.h"
 #include "poko_physics_contracts.h"
 #include "poko_render_contracts.h"
 #include "poko_result.h"
@@ -108,6 +109,35 @@ public:
     virtual void step(float delta_seconds) = 0;
 
     virtual std::uint32_t body_count() const noexcept = 0;
+};
+
+// Phase 1 (assets, systemplan/05): asynchronous asset loading boundary.
+// logical_path is a package-relative path, never a raw OS path. Backends own
+// decoding/caching; a MOCK NullAssetProvider implements it for offline tests.
+class IAssetProvider {
+public:
+    virtual ~IAssetProvider() = default;
+
+    virtual bool initialize() noexcept = 0;
+
+    // Queues an async load. Returns a request id used with poll_load/cancel.
+    virtual Result<LoadRequestId> request_load(const AssetDesc& desc) = 0;
+    virtual Status cancel_load(LoadRequestId id) = 0;
+
+    // Returns true and fills `out` once the request finished (Ready or
+    // Failed). `out` is untouched while pending.
+    virtual bool poll_load(LoadRequestId id, LoadResult& out) = 0;
+
+    virtual AssetState asset_state(AssetHandle asset) const = 0;
+
+    // Returns the completed payload for a Ready asset; fails otherwise.
+    virtual Result<LoadResult> get_asset(AssetHandle asset) const = 0;
+
+    // Drops the asset (eviction/lifetime rule). Pending loads are cancelled.
+    virtual Status release_asset(AssetHandle asset) = 0;
+
+    // Pumps queued work; backends may complete loads here or on workers.
+    virtual void update() = 0;
 };
 
 class IAudioDevice {
