@@ -56,7 +56,12 @@ endif()
 # (which requires POKO_FETCH_DEPENDENCIES=ON and SDL3 for surfaces).
 # ---------------------------------------------------------------------------
 if(POKO_RENDER_VULKAN)
-    add_library(poko_render_vulkan STATIC src/vulkan_device.cpp)
+    add_library(poko_render_vulkan STATIC
+        src/vk_device.cpp
+        src/vk_swapchain.cpp
+        src/vk_resources.cpp
+        src/vk_uploads.cpp
+        src/vk_frame.cpp)
     target_include_directories(poko_render_vulkan PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
     target_link_libraries(poko_render_vulkan PUBLIC
