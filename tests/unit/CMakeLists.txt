@@ -11,7 +11,8 @@ set(_poko_unit_sources
     physics_contracts_test.cpp
     physics_null_world_test.cpp
     asset_contracts_test.cpp
-    assets_null_provider_test.cpp)
+    assets_null_provider_test.cpp
+    scene_graph_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -38,6 +39,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     endif()
     if(TARGET poko_assets_null)
         target_link_libraries(poko_test_${_poko_name} PRIVATE poko_assets_null)
+    endif()
+    if(TARGET poko_scene)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_scene)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
