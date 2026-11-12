@@ -16,6 +16,7 @@
 #include <string_view>
 
 #include "poko_asset_contracts.h"
+#include "poko_audio_contracts.h"
 #include "poko_physics_contracts.h"
 #include "poko_render_contracts.h"
 #include "poko_result.h"
@@ -140,9 +141,30 @@ public:
     virtual void update() = 0;
 };
 
+// Phase 1 (audio, systemplan/07): playback device boundary. logical_path is
+// package-relative. A MOCK NullAudioDevice implements it for offline tests;
+// miniaudio is the planned production backend.
 class IAudioDevice {
 public:
     virtual ~IAudioDevice() = default;
+
+    virtual bool initialize() noexcept = 0;
+
+    // Loads/decodes a sound asset and returns a playable handle.
+    virtual Result<SoundHandle> load_sound(const SoundDesc& desc) = 0;
+    virtual Status unload_sound(SoundHandle sound) = 0;
+
+    virtual Status play(SoundHandle sound) = 0;
+    virtual Status stop(SoundHandle sound) = 0;
+    virtual Status set_volume(SoundHandle sound, float volume) = 0;
+    virtual Status set_paused(SoundHandle sound, bool paused) = 0;
+
+    virtual bool is_playing(SoundHandle sound) const = 0;
+
+    // Listener pose for positional attenuation.
+    virtual Status set_listener(const ListenerState& listener) = 0;
+
+    virtual AudioStats stats() const = 0;
 };
 
 class INetworkTransport {

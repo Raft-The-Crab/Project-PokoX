@@ -15,7 +15,9 @@ set(_poko_unit_sources
     scene_graph_test.cpp
     ecs_registry_test.cpp
     animation_clip_test.cpp
-    input_system_test.cpp)
+    input_system_test.cpp
+    audio_contracts_test.cpp
+    audio_null_device_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -54,6 +56,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     endif()
     if(TARGET poko_input)
         target_link_libraries(poko_test_${_poko_name} PRIVATE poko_input)
+    endif()
+    if(TARGET poko_audio_null)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_audio_null)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
