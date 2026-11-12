@@ -38,9 +38,59 @@ poko_add_unit_tests(poko_runtime
     TEST_SOURCES runtime_real_backends_test.cpp
     LINK_LIBS poko_physics_custom poko_assets_fs poko_platform)
 
-# Client-side integration: renderer + graphics -> DrawCall -> render_frame.
-# A headless Server build contains no renderer (systemplan/18).
+# Phase 1 performance baseline (systemplan/27 exit criterion). Uses only the
+# PRODUCTION CPU backends so it builds in every configuration, including the
+# headless Server build.
+add_executable(poko_engine_bench src/engine_bench_main.cpp)
+target_link_libraries(poko_engine_bench PRIVATE
+    poko_core
+    poko_runtime
+    poko_benchmarks
+    poko_physics_custom
+    poko_assets_fs
+    poko_audio_mixer
+    poko_net_channel
+    poko_platform)
+poko_apply_common(poko_engine_bench)
+poko_set_impl_label(poko_engine_bench LOCAL_DEV)
+add_test(NAME benchmark.engine COMMAND poko_engine_bench)
+
+# PRODUCTION engine facade + client integration: renderer + graphics ->
+# DrawCall -> render_frame. A headless Server build contains no renderer
+# (systemplan/18), so these targets are gated the same way.
 if(NOT POKO_SERVER_CONFIG)
+    add_library(poko_engine STATIC
+        src/engine.cpp
+        src/engine_backends.cpp
+        src/engine_render.cpp)
+
+    target_include_directories(poko_engine PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    target_link_libraries(poko_engine PUBLIC
+        poko_core
+        poko_runtime
+        poko_physics_custom
+        poko_assets_fs
+        poko_audio_mixer
+        poko_net_channel
+        poko_platform
+        poko_renderer
+        poko_render_null
+        poko_graphics)
+    poko_apply_common(poko_engine)
+    poko_set_impl_label(poko_engine PRODUCTION)
+
+    poko_add_unit_tests(poko_engine
+        TEST_SOURCES engine_test.cpp)
+
+    add_executable(poko_engine_demo src/engine_demo_main.cpp)
+    target_link_libraries(poko_engine_demo PRIVATE poko_engine)
+    poko_apply_common(poko_engine_demo)
+    poko_set_impl_label(poko_engine_demo LOCAL_DEV)
+    add_test(NAME runtime.engine COMMAND poko_engine_demo)
+
+    # Original MOCK-backed integration harness, kept as a regression check
+    # that the seams still work with the deterministic fakes.
     add_executable(poko_game_demo src/game_main.cpp)
     target_link_libraries(poko_game_demo PRIVATE
         poko_runtime
