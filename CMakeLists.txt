@@ -58,10 +58,14 @@ add_subdirectory(engine/character)
 add_subdirectory(engine/reflection)
 add_subdirectory(engine/ai)
 add_subdirectory(engine/bindings)
+add_subdirectory(engine/benchmarks)
 
-# A headless Server build contains no renderer (systemplan/18).
+# A headless Server build contains no renderer (systemplan/18). The graphics
+# layer builds on the renderer's NullRenderDevice for its unit tests, so it is
+# gated the same way.
 if(NOT POKO_SERVER_CONFIG)
     add_subdirectory(engine/renderer)
+    add_subdirectory(engine/graphics)
 endif()
 
 if(POKO_BUILD_TOOLS)
