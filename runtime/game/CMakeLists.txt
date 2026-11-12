@@ -33,6 +33,11 @@ poko_add_unit_tests(poko_runtime
     TEST_SOURCES runtime_frame_loop_test.cpp
     LINK_LIBS poko_physics_null poko_assets_null)
 
+# Integration: the PRODUCTION backends are drop-in behind the same seams.
+poko_add_unit_tests(poko_runtime
+    TEST_SOURCES runtime_real_backends_test.cpp
+    LINK_LIBS poko_physics_custom poko_assets_fs poko_platform)
+
 # Client-side integration: renderer + graphics -> DrawCall -> render_frame.
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)
