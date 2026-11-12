@@ -28,8 +28,11 @@ namespace {
 
 constexpr const char* kVertexShader = R"(#version 450
 layout(location = 0) in vec3 aPos;
+layout(set = 0, binding = 0, std140) uniform Camera {
+    mat4 mvp;
+} camera;
 void main() {
-    gl_Position = vec4(aPos, 1.0);
+    gl_Position = camera.mvp * vec4(aPos, 1.0);
 }
 )";
 
@@ -44,6 +47,14 @@ constexpr float kTriangle[] = {
     -0.6f, -0.4f, 0.0f, //
     0.6f,  -0.4f, 0.0f, //
     0.0f,  0.6f,  0.0f, //
+};
+
+// Column-major identity MVP (std140 mat4), 64 bytes.
+constexpr float kIdentityMvp[16] = {
+    1.0f, 0.0f, 0.0f, 0.0f, //
+    0.0f, 1.0f, 0.0f, 0.0f, //
+    0.0f, 0.0f, 1.0f, 0.0f, //
+    0.0f, 0.0f, 0.0f, 1.0f, //
 };
 
 int run(int argc, char** argv) {
@@ -190,35 +201,48 @@ int run(int argc, char** argv) {
                             std::cerr << "vertex upload failed\n";
                             exit_code = 1;
                         } else {
-                            poko::DrawCall call;
-                            call.pipeline = pipeline.value();
-                            call.vertex_buffer = vb.value();
-                            call.vertex_count = 3;
-                            renderer.submission().submit(call);
-                            bool running = true;
-                            int frames = 0;
-                            while (running) {
-                                SDL_Event event;
-                                while (SDL_PollEvent(&event)) {
-                                    if (event.type == SDL_EVENT_QUIT ||
-                                        event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                                        running = false;
+                            const auto ubo = renderer.device().create_buffer(
+                                poko::BufferDesc{sizeof(kIdentityMvp), poko::BufferUsage::Uniform,
+                                                 true, "camera.ubo"});
+                            const std::span<const std::byte> mvp_bytes{
+                                reinterpret_cast<const std::byte*>(kIdentityMvp),
+                                sizeof(kIdentityMvp)};
+                            if (!ubo.ok() ||
+                                !renderer.device().update_buffer(ubo.value(), mvp_bytes).ok()) {
+                                std::cerr << "uniform buffer creation/upload failed\n";
+                                exit_code = 1;
+                            } else {
+                                poko::DrawCall call;
+                                call.pipeline = pipeline.value();
+                                call.vertex_buffer = vb.value();
+                                call.uniform_buffer = ubo.value();
+                                call.vertex_count = 3;
+                                renderer.submission().submit(call);
+                                bool running = true;
+                                int frames = 0;
+                                while (running) {
+                                    SDL_Event event;
+                                    while (SDL_PollEvent(&event)) {
+                                        if (event.type == SDL_EVENT_QUIT ||
+                                            event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                                            running = false;
+                                        }
                                     }
+                                    if (!running || (frame_limit >= 0 && frames >= frame_limit)) {
+                                        break;
+                                    }
+                                    const auto st = renderer.render_frame(
+                                        poko::ClearValue{0.08f, 0.09f, 0.12f, 1.0f});
+                                    if (!st.ok()) {
+                                        std::cerr << "render_frame failed: " << st.error().message
+                                                  << '\n';
+                                        exit_code = 1;
+                                        break;
+                                    }
+                                    ++frames;
                                 }
-                                if (!running || (frame_limit >= 0 && frames >= frame_limit)) {
-                                    break;
-                                }
-                                const auto st = renderer.render_frame(
-                                    poko::ClearValue{0.08f, 0.09f, 0.12f, 1.0f});
-                                if (!st.ok()) {
-                                    std::cerr << "render_frame failed: " << st.error().message
-                                              << '\n';
-                                    exit_code = 1;
-                                    break;
-                                }
-                                ++frames;
+                                std::cout << "frames rendered: " << frames << std::endl;
                             }
-                            std::cout << "frames rendered: " << frames << std::endl;
                         }
                     }
                 }

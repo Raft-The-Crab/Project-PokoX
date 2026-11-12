@@ -77,6 +77,9 @@ private:
         bool depth_test = true;
         bool depth_write = true;
         PrimitiveTopology topology = PrimitiveTopology::Triangles;
+        // Number of std140 uniform blocks in the linked program; block i is
+        // bound to uniform-buffer binding point i at pipeline creation.
+        std::uint32_t uniform_block_count = 0;
     };
 
     bool handle_live(RenderHandle handle) const noexcept; // caller holds mutex_

@@ -463,6 +463,14 @@ Result<RenderHandle> GlRenderDevice::create_pipeline(const PipelineDesc& desc) {
                                           "program link failed: " + log);
     }
 
+    // Bind each std140 uniform block to the binding point matching its block
+    // index so DrawCall::uniform_buffer lands on the shader's blocks in order.
+    GLint block_count = 0;
+    glGetProgramInterfaceiv(program, GL_UNIFORM_BLOCK, GL_ACTIVE_RESOURCES, &block_count);
+    for (GLint i = 0; i < block_count; ++i) {
+        glUniformBlockBinding(program, static_cast<GLuint>(i), static_cast<GLuint>(i));
+    }
+
     HandleIndex index;
     if (!free_.empty()) {
         index = free_.back();
@@ -483,6 +491,7 @@ Result<RenderHandle> GlRenderDevice::create_pipeline(const PipelineDesc& desc) {
     resource.depth_compare = desc.depth_compare;
     resource.depth_test = desc.depth_test;
     resource.depth_write = desc.depth_write;
+    resource.uniform_block_count = static_cast<std::uint32_t>(block_count);
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
 }
 
@@ -587,6 +596,12 @@ Status GlRenderDevice::draw(const DrawCall& call) {
         (indices == nullptr || indices->kind != Kind::Buffer || !handle_live(call.index_buffer))) {
         return Status::fail(ErrorCode::NotFound, "index buffer handle is not live");
     }
+    const auto* uniforms =
+        is_valid(call.uniform_buffer) ? find(call.uniform_buffer.index) : nullptr;
+    if (is_valid(call.uniform_buffer) && (uniforms == nullptr || uniforms->kind != Kind::Buffer ||
+                                          !handle_live(call.uniform_buffer))) {
+        return Status::fail(ErrorCode::NotFound, "uniform buffer handle is not live");
+    }
 
     glBindVertexArray(vao_);
     glUseProgram(pipeline->gl_id);
@@ -621,6 +636,17 @@ Status GlRenderDevice::draw(const DrawCall& call) {
             kAttributeType, GL_FALSE, static_cast<GLsizei>(stride),
             reinterpret_cast<const void*>(static_cast<std::uintptr_t>(attribute.offset_bytes)));
         glEnableVertexAttribArray(static_cast<GLuint>(attribute.location));
+    }
+
+    if (uniforms != nullptr) {
+        const std::uint64_t range = uniforms->size_bytes > call.uniform_offset
+                                        ? uniforms->size_bytes - call.uniform_offset
+                                        : 0;
+        for (std::uint32_t i = 0; i < pipeline->uniform_block_count; ++i) {
+            glBindBufferRange(GL_UNIFORM_BUFFER, i, uniforms->gl_id,
+                              static_cast<GLintptr>(call.uniform_offset),
+                              static_cast<GLsizeiptr>(range));
+        }
     }
 
     const std::uint32_t mode = primitive_mode(pipeline->topology);

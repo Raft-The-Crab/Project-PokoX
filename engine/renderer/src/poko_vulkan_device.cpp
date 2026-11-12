@@ -151,6 +151,9 @@ VkFormat vk_attrib_format(std::uint32_t components) noexcept {
     }
 }
 
+// Maximum descriptor sets (one per draw call) allocatable per frame slot.
+constexpr std::uint32_t kMaxUniformSetsPerFrame = 256;
+
 // Compiles GLSL source to SPIR-V via glslang. Returns false on failure with
 // the log appended to `log_out`.
 bool compile_spirv(ShaderStage stage, const std::string& source,
@@ -214,6 +217,10 @@ VulkanRenderDevice::~VulkanRenderDevice() {
         if (rnd != nullptr) {
             vkDestroySemaphore(dev, rnd, nullptr);
         }
+        if (slot.descriptor_pool != nullptr) {
+            vkDestroyDescriptorPool(dev, static_cast<VkDescriptorPool>(slot.descriptor_pool),
+                                    nullptr);
+        }
     }
     for (auto& resource : resources_) {
         destroy_resource_objects(resource);
@@ -226,6 +233,10 @@ VulkanRenderDevice::~VulkanRenderDevice() {
     }
     if (pipeline_layout_ != nullptr) {
         vkDestroyPipelineLayout(dev, static_cast<VkPipelineLayout>(pipeline_layout_), nullptr);
+    }
+    if (descriptor_set_layout_ != nullptr) {
+        vkDestroyDescriptorSetLayout(
+            dev, static_cast<VkDescriptorSetLayout>(descriptor_set_layout_), nullptr);
     }
     if (command_pool_ != nullptr) {
         vkDestroyCommandPool(dev, static_cast<VkCommandPool>(command_pool_), nullptr);
@@ -331,9 +342,26 @@ bool VulkanRenderDevice::initialize() noexcept {
     }
     command_pool_ = command_pool;
 
-    // Pipeline layout: no descriptors, no push constants (uniforms arrive
-    // with the camera seam extension, DEC-005).
+    // Descriptor set 0: one uniform buffer at binding 0, visible to both
+    // stages. DrawCall::uniform_buffer lands here.
+    VkDescriptorSetLayoutBinding ubo_binding{};
+    ubo_binding.binding = 0;
+    ubo_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubo_binding.descriptorCount = 1;
+    ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSetLayoutCreateInfo dsl_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    dsl_info.bindingCount = 1;
+    dsl_info.pBindings = &ubo_binding;
+    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+    if (vkCreateDescriptorSetLayout(device, &dsl_info, nullptr, &descriptor_set_layout) !=
+        VK_SUCCESS) {
+        return false;
+    }
+    descriptor_set_layout_ = descriptor_set_layout;
+
     VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    layout_info.setLayoutCount = 1;
+    layout_info.pSetLayouts = &descriptor_set_layout;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     if (vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
         return false;
@@ -593,6 +621,18 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width, std::
         }
         fs.acquire_sem = acq;
         fs.render_sem = rnd;
+        // Descriptor pool for this slot's uniform-buffer sets; reset when the
+        // slot is reused in acquire_image after its fence has been waited.
+        VkDescriptorPoolSize pool_size{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kMaxUniformSetsPerFrame};
+        VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        pool_info.maxSets = kMaxUniformSetsPerFrame;
+        pool_info.poolSizeCount = 1;
+        pool_info.pPoolSizes = &pool_size;
+        VkDescriptorPool dpool = VK_NULL_HANDLE;
+        if (vkCreateDescriptorPool(dev, &pool_info, nullptr, &dpool) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::ResourceExhausted, "vkCreateDescriptorPool failed");
+        }
+        fs.descriptor_pool = dpool;
     }
     return Status::success();
 }
@@ -1016,6 +1056,7 @@ Status VulkanRenderDevice::acquire_image() {
                         std::numeric_limits<std::uint64_t>::max());
     }
     vkResetFences(dev, 1, reinterpret_cast<VkFence*>(&slot.fence));
+    vkResetDescriptorPool(dev, static_cast<VkDescriptorPool>(slot.descriptor_pool), 0);
     vkResetCommandBuffer(static_cast<VkCommandBuffer>(slot.command_buffer), 0);
     const VkResult result = vkAcquireNextImageKHR(
         dev, static_cast<VkSwapchainKHR>(swapchain_), std::numeric_limits<std::uint64_t>::max(),
@@ -1123,14 +1164,51 @@ Status VulkanRenderDevice::draw(const DrawCall& call) {
         (indices == nullptr || indices->kind != Kind::Buffer || !handle_live(call.index_buffer))) {
         return Status::fail(ErrorCode::NotFound, "index buffer handle is not live");
     }
+    const auto* uniforms =
+        is_valid(call.uniform_buffer) ? find(call.uniform_buffer.index) : nullptr;
+    if (is_valid(call.uniform_buffer) && (uniforms == nullptr || uniforms->kind != Kind::Buffer ||
+                                          !handle_live(call.uniform_buffer))) {
+        return Status::fail(ErrorCode::NotFound, "uniform buffer handle is not live");
+    }
+    if (uniforms != nullptr && call.uniform_offset >= uniforms->aux) {
+        return Status::fail(ErrorCode::OutOfRange, "uniform offset is out of range");
+    }
     const Status pass_status = record_draws_into_pass();
     if (!pass_status.ok()) {
         return pass_status;
     }
     FrameSlot& slot = frame_slots_[(frame_slot_ - 1) % frame_slots_.size()];
     auto* cb = static_cast<VkCommandBuffer>(slot.command_buffer);
+    auto* dev = static_cast<VkDevice>(device_);
     vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       static_cast<VkPipeline>(pipeline->object));
+    if (uniforms != nullptr) {
+        VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        alloc_info.descriptorPool = static_cast<VkDescriptorPool>(slot.descriptor_pool);
+        alloc_info.descriptorSetCount = 1;
+        VkDescriptorSetLayout set_layout =
+            static_cast<VkDescriptorSetLayout>(descriptor_set_layout_);
+        alloc_info.pSetLayouts = &set_layout;
+        VkDescriptorSet set = VK_NULL_HANDLE;
+        if (vkAllocateDescriptorSets(dev, &alloc_info, &set) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::ResourceExhausted,
+                                "vkAllocateDescriptorSets failed (frame uniform limit?)");
+        }
+        VkDescriptorBufferInfo buffer_info{};
+        buffer_info.buffer = static_cast<VkBuffer>(uniforms->object);
+        buffer_info.offset = static_cast<VkDeviceSize>(call.uniform_offset);
+        buffer_info.range = static_cast<VkDeviceSize>(uniforms->aux - call.uniform_offset);
+        VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        write.dstSet = set;
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write.pBufferInfo = &buffer_info;
+        vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                static_cast<VkPipelineLayout>(pipeline_layout_), 0, 1, &set, 0,
+                                nullptr);
+    }
     const VkDeviceSize offset = 0;
     VkBuffer vb = static_cast<VkBuffer>(vertices->object);
     vkCmdBindVertexBuffers(cb, 0, 1, &vb, &offset);
@@ -1251,6 +1329,10 @@ Status VulkanRenderDevice::recreate_swapchain(std::uint32_t width, std::uint32_t
         }
         if (rnd != nullptr) {
             vkDestroySemaphore(dev, rnd, nullptr);
+        }
+        if (slot.descriptor_pool != nullptr) {
+            vkDestroyDescriptorPool(dev, static_cast<VkDescriptorPool>(slot.descriptor_pool),
+                                    nullptr);
         }
     }
     for (auto view : color_views_) {

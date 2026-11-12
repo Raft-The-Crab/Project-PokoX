@@ -85,10 +85,11 @@ private:
     // can return any image — the acquire semaphore must be chosen before the
     // image index is known.
     struct FrameSlot {
-        void* command_buffer = nullptr; // VkCommandBuffer
-        void* fence = nullptr;          // VkFence (submit completion)
-        void* acquire_sem = nullptr;    // VkSemaphore (image available)
-        void* render_sem = nullptr;     // VkSemaphore (render finished)
+        void* command_buffer = nullptr;  // VkCommandBuffer
+        void* fence = nullptr;           // VkFence (submit completion)
+        void* acquire_sem = nullptr;     // VkSemaphore (image available)
+        void* render_sem = nullptr;      // VkSemaphore (render finished)
+        void* descriptor_pool = nullptr; // VkDescriptorPool
         bool fence_submitted = false;
     };
 
@@ -112,15 +113,16 @@ private:
     Status acquire_image();
     Status record_draws_into_pass();
 
-    void* instance_ = nullptr;        // VkInstance
-    void* physical_device_ = nullptr; // VkPhysicalDevice (borrowed)
-    void* device_ = nullptr;          // VkDevice
-    void* queue_ = nullptr;           // VkQueue
-    void* surface_ = nullptr;         // VkSurfaceKHR (borrowed)
-    void* command_pool_ = nullptr;    // VkCommandPool
-    void* render_pass_ = nullptr;     // VkRenderPass
-    void* swapchain_ = nullptr;       // VkSwapchainKHR
-    void* pipeline_layout_ = nullptr; // VkPipelineLayout
+    void* instance_ = nullptr;              // VkInstance
+    void* physical_device_ = nullptr;       // VkPhysicalDevice (borrowed)
+    void* device_ = nullptr;                // VkDevice
+    void* queue_ = nullptr;                 // VkQueue
+    void* surface_ = nullptr;               // VkSurfaceKHR (borrowed)
+    void* command_pool_ = nullptr;          // VkCommandPool
+    void* render_pass_ = nullptr;           // VkRenderPass
+    void* swapchain_ = nullptr;             // VkSwapchainKHR
+    void* pipeline_layout_ = nullptr;       // VkPipelineLayout
+    void* descriptor_set_layout_ = nullptr; // VkDescriptorSetLayout (set 0: UBO binding 0)
     std::uint32_t swapchain_format_ = 0;
     std::uint32_t swapchain_extent_w_ = 0;
     std::uint32_t swapchain_extent_h_ = 0;

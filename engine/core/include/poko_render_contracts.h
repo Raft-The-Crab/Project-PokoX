@@ -168,6 +168,11 @@ struct DrawCall {
     RenderHandle pipeline;
     RenderHandle vertex_buffer;
     RenderHandle index_buffer;
+    // Optional uniform buffer (BufferUsage::Uniform) bound for this draw.
+    // Shaders consume it through a std140 uniform block; an invalid handle
+    // means no uniforms are bound.
+    RenderHandle uniform_buffer;
+    std::uint64_t uniform_offset = 0;
     std::uint32_t vertex_count = 0;
     std::uint32_t index_count = 0;
     std::uint32_t instance_count = 1;
