@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 
+#include "poko_physics_contracts.h"
 #include "poko_render_contracts.h"
 #include "poko_result.h"
 
@@ -79,16 +80,34 @@ public:
     virtual Status recover_from_device_loss() = 0;
 };
 
-// STUB declarations — owned by later subsystems (systemplan/01, 27).
-
-class IAssetProvider {
-public:
-    virtual ~IAssetProvider() = default;
-};
-
+// Phase 1 (physics, systemplan/06): rigid-body world boundary. The custom
+// physics module is planned; a MOCK NullPhysicsWorld implements it for
+// offline tests. Backend selection (custom vs library) is an open decision.
 class IPhysicsWorld {
 public:
     virtual ~IPhysicsWorld() = default;
+
+    // Configures gravity and the fixed timestep. Must be called before use.
+    virtual bool initialize(const PhysicsWorldDesc& desc) noexcept = 0;
+
+    virtual Result<BodyHandle> create_body(const BodyDesc& desc) = 0;
+    virtual Status destroy_body(BodyHandle body) = 0;
+
+    // Teleports/updates a body (kinematic control, spawn correction).
+    virtual Status set_body_state(BodyHandle body, const BodyState& state) = 0;
+    virtual Result<BodyState> get_body_state(BodyHandle body) const = 0;
+
+    // Returns true and fills `out` on the nearest hit within max_distance
+    // whose layer/mask pair collides with layer_mask. `out` is untouched on
+    // miss. Ray direction should be normalized.
+    virtual bool raycast(const Ray& ray, float max_distance, std::uint32_t layer_mask,
+                         RayHit& out) const = 0;
+
+    // Advances simulation by delta_seconds of wall time; backends may
+    // sub-step at PhysicsWorldDesc::fixed_delta_seconds internally.
+    virtual void step(float delta_seconds) = 0;
+
+    virtual std::uint32_t body_count() const noexcept = 0;
 };
 
 class IAudioDevice {

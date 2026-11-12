@@ -7,7 +7,9 @@ set(_poko_unit_sources
     core_math_test.cpp
     core_clock_event_job_test.cpp
     core_diagnostics_settings_ownership_test.cpp
-    core_platform_fs_test.cpp)
+    core_platform_fs_test.cpp
+    physics_contracts_test.cpp
+    physics_null_world_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -28,6 +30,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     if(TARGET poko_renderer)
         target_link_libraries(poko_test_${_poko_name} PRIVATE
             poko_renderer poko_render_null)
+    endif()
+    if(TARGET poko_physics_null)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_physics_null)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
