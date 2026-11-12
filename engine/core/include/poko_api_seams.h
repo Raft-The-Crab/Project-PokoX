@@ -54,12 +54,19 @@ public:
     virtual Result<RenderHandle> create_texture(const TextureDesc& desc) = 0;
     virtual Result<RenderHandle> create_shader(const ShaderDesc& desc) = 0;
     virtual Result<RenderHandle> create_pipeline(const PipelineDesc& desc) = 0;
+    virtual Result<RenderHandle> create_sampler(const SamplerDesc& desc) = 0;
     virtual Status destroy(RenderHandle handle) = 0;
 
     // Uploads raw bytes into a buffer created with create_buffer(). Backends
     // must reject writes past the buffer's declared size.
     virtual Status update_buffer(RenderHandle handle, std::span<const std::byte> data,
                                  std::uint64_t offset_bytes = 0) = 0;
+
+    // Uploads one mip level of a texture created with create_texture(). The
+    // data span must cover the full level (level dimensions x bytes per
+    // pixel); partial uploads are not part of the seam yet.
+    virtual Status update_texture(RenderHandle handle, std::uint32_t mip_level,
+                                  std::span<const std::byte> data) = 0;
 
     virtual Status begin_frame() = 0;
     virtual Status clear(const ClearValue& value) = 0;

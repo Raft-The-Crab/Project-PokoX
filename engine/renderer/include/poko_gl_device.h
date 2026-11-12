@@ -40,9 +40,12 @@ public:
     Result<RenderHandle> create_texture(const TextureDesc& desc) override;
     Result<RenderHandle> create_shader(const ShaderDesc& desc) override;
     Result<RenderHandle> create_pipeline(const PipelineDesc& desc) override;
+    Result<RenderHandle> create_sampler(const SamplerDesc& desc) override;
     Status destroy(RenderHandle handle) override;
     Status update_buffer(RenderHandle handle, std::span<const std::byte> data,
                          std::uint64_t offset_bytes = 0) override;
+    Status update_texture(RenderHandle handle, std::uint32_t mip_level,
+                          std::span<const std::byte> data) override;
 
     Status begin_frame() override;
     Status clear(const ClearValue& value) override;
@@ -60,7 +63,7 @@ public:
     void set_viewport(std::uint32_t width, std::uint32_t height) noexcept;
 
 private:
-    enum class Kind : std::uint8_t { Buffer, Texture, Shader, Pipeline };
+    enum class Kind : std::uint8_t { Buffer, Texture, Shader, Pipeline, Sampler };
 
     struct Resource {
         Kind kind = Kind::Buffer;
@@ -80,6 +83,11 @@ private:
         // Number of std140 uniform blocks in the linked program; block i is
         // bound to uniform-buffer binding point i at pipeline creation.
         std::uint32_t uniform_block_count = 0;
+        // Texture bookkeeping (update_texture needs the declared shape).
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        std::uint32_t mip_levels = 1;
+        std::uint32_t pixel_format = 0; // PixelFormat as std::uint32_t
     };
 
     bool handle_live(RenderHandle handle) const noexcept; // caller holds mutex_

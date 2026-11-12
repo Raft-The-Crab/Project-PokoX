@@ -38,9 +38,12 @@ public:
     Result<RenderHandle> create_texture(const TextureDesc& desc) override;
     Result<RenderHandle> create_shader(const ShaderDesc& desc) override;
     Result<RenderHandle> create_pipeline(const PipelineDesc& desc) override;
+    Result<RenderHandle> create_sampler(const SamplerDesc& desc) override;
     Status destroy(RenderHandle handle) override;
     Status update_buffer(RenderHandle handle, std::span<const std::byte> data,
                          std::uint64_t offset_bytes = 0) override;
+    Status update_texture(RenderHandle handle, std::uint32_t mip_level,
+                          std::span<const std::byte> data) override;
 
     Status begin_frame() override;
     Status clear(const ClearValue& value) override;
@@ -55,7 +58,7 @@ public:
     Status recreate_swapchain(std::uint32_t width, std::uint32_t height);
 
 private:
-    enum class Kind : std::uint8_t { Buffer, Texture, Shader, Pipeline };
+    enum class Kind : std::uint8_t { Buffer, Texture, Shader, Pipeline, Sampler };
 
     struct Resource {
         Kind kind = Kind::Buffer;
@@ -72,7 +75,10 @@ private:
         bool depth_test = true;
         bool depth_write = true;
         PrimitiveTopology topology = PrimitiveTopology::Triangles;
-        std::uint32_t format = 0; // texture pixel format
+        std::uint32_t format = 0; // texture pixel format (VkFormat)
+        std::uint32_t width = 0;  // texture only
+        std::uint32_t height = 0; // texture only
+        std::uint32_t mip_levels = 1;
     };
 
     struct DepthImage {

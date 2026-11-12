@@ -66,6 +66,22 @@ std::uint32_t primitive_mode(PrimitiveTopology topology) noexcept {
     return GL_TRIANGLES;
 }
 
+std::uint32_t filter_mode(FilterMode mode) noexcept {
+    return mode == FilterMode::Nearest ? GL_NEAREST : GL_LINEAR;
+}
+
+std::uint32_t wrap_mode(WrapMode mode) noexcept {
+    switch (mode) {
+    case WrapMode::Repeat:
+        return GL_REPEAT;
+    case WrapMode::ClampToEdge:
+        return GL_CLAMP_TO_EDGE;
+    case WrapMode::MirroredRepeat:
+        return GL_MIRRORED_REPEAT;
+    }
+    return GL_REPEAT;
+}
+
 std::uint32_t compare_op(CompareOp op) noexcept {
     switch (op) {
     case CompareOp::Never:
@@ -108,8 +124,16 @@ struct GlFormat {
     std::uint32_t internal_format;
     std::uint32_t format;
     std::uint32_t type;
-    std::uint32_t channels;
+    std::uint32_t bytes_per_pixel;
 };
+
+std::uint32_t mip_dimension(std::uint32_t base, std::uint32_t level) noexcept {
+    if (level >= 32) {
+        return 1;
+    }
+    const std::uint32_t dim = base >> level;
+    return dim == 0 ? 1 : dim;
+}
 
 bool pixel_format(PixelFormat format, GlFormat& out) noexcept {
     switch (format) {
@@ -126,16 +150,16 @@ bool pixel_format(PixelFormat format, GlFormat& out) noexcept {
         out = {GL_R8, GL_RED, GL_UNSIGNED_BYTE, 1};
         return true;
     case PixelFormat::RGBA16F:
-        out = {GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, 4};
+        out = {GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, 8};
         return true;
     case PixelFormat::RGBA32F:
-        out = {GL_RGBA32F, GL_RGBA, GL_FLOAT, 4};
+        out = {GL_RGBA32F, GL_RGBA, GL_FLOAT, 16};
         return true;
     case PixelFormat::Depth24Stencil8:
-        out = {GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, 2};
+        out = {GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, 4};
         return true;
     case PixelFormat::Depth32F:
-        out = {GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT, 1};
+        out = {GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT, 4};
         return true;
     case PixelFormat::Unknown:
         break;
@@ -172,6 +196,9 @@ GlRenderDevice::~GlRenderDevice() {
             break;
         case Kind::Pipeline:
             glDeleteProgram(resource.gl_id);
+            break;
+        case Kind::Sampler:
+            glDeleteSamplers(1, &resource.gl_id);
             break;
         }
     }
@@ -337,11 +364,8 @@ Result<RenderHandle> GlRenderDevice::create_texture(const TextureDesc& desc) {
     // Immutable-format glTexStorage* needs GL 4.2; allocate per-level with
     // glTexImage2D so the 3.3 core floor stays valid.
     for (std::uint32_t level = 0; level < desc.mip_levels; ++level) {
-        const std::uint32_t shift = level < 32 ? level : 31;
-        const std::uint32_t width =
-            level >= 32 ? 1 : (desc.width >> shift == 0 ? 1 : desc.width >> shift);
-        const std::uint32_t height =
-            level >= 32 ? 1 : (desc.height >> shift == 0 ? 1 : desc.height >> shift);
+        const std::uint32_t width = mip_dimension(desc.width, level);
+        const std::uint32_t height = mip_dimension(desc.height, level);
         glTexImage2D(GL_TEXTURE_2D, static_cast<GLint>(level),
                      static_cast<GLint>(format.internal_format), static_cast<GLsizei>(width),
                      static_cast<GLsizei>(height), 0, format.format, format.type, nullptr);
@@ -371,6 +395,10 @@ Result<RenderHandle> GlRenderDevice::create_texture(const TextureDesc& desc) {
     resource.kind = Kind::Texture;
     resource.alive = true;
     resource.gl_id = id;
+    resource.width = desc.width;
+    resource.height = desc.height;
+    resource.mip_levels = desc.mip_levels;
+    resource.pixel_format = static_cast<std::uint32_t>(desc.format);
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
 }
 
@@ -495,6 +523,45 @@ Result<RenderHandle> GlRenderDevice::create_pipeline(const PipelineDesc& desc) {
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
 }
 
+Result<RenderHandle> GlRenderDevice::create_sampler(const SamplerDesc& desc) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (!initialized_) {
+        return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition,
+                                          "device is not initialized");
+    }
+    GLuint sampler = 0;
+    glGenSamplers(1, &sampler);
+    if (sampler == 0) {
+        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted, "glGenSamplers failed");
+    }
+    glSamplerParameteri(sampler, GL_TEXTURE_MIN_FILTER,
+                        static_cast<GLint>(filter_mode(desc.min_filter)));
+    glSamplerParameteri(sampler, GL_TEXTURE_MAG_FILTER,
+                        static_cast<GLint>(filter_mode(desc.mag_filter)));
+    glSamplerParameteri(sampler, GL_TEXTURE_WRAP_S, static_cast<GLint>(wrap_mode(desc.wrap_u)));
+    glSamplerParameteri(sampler, GL_TEXTURE_WRAP_T, static_cast<GLint>(wrap_mode(desc.wrap_v)));
+    if (const Status status = gl_error_status("glSamplerParameteri"); !status.ok()) {
+        glDeleteSamplers(1, &sampler);
+        return Result<RenderHandle>::fail(status.code(), status.error().message);
+    }
+
+    HandleIndex index;
+    if (!free_.empty()) {
+        index = free_.back();
+        free_.pop_back();
+        resources_[index] = Resource{};
+    } else {
+        index = static_cast<HandleIndex>(resources_.size());
+        resources_.push_back(Resource{});
+        generations_.push_back(0);
+    }
+    auto& resource = resources_[index];
+    resource.kind = Kind::Sampler;
+    resource.alive = true;
+    resource.gl_id = sampler;
+    return Result<RenderHandle>::success(make_handle(index, generations_[index]));
+}
+
 Status GlRenderDevice::destroy(RenderHandle handle) {
     std::lock_guard<std::mutex> guard(mutex_);
     if (!handle_live(handle)) {
@@ -513,6 +580,9 @@ Status GlRenderDevice::destroy(RenderHandle handle) {
         break;
     case Kind::Pipeline:
         glDeleteProgram(resource.gl_id);
+        break;
+    case Kind::Sampler:
+        glDeleteSamplers(1, &resource.gl_id);
         break;
     }
     resource.alive = false;
@@ -547,6 +617,41 @@ Status GlRenderDevice::update_buffer(RenderHandle handle, std::span<const std::b
     glBindBuffer(static_cast<GLenum>(resource->target), 0);
     glBindVertexArray(0);
     return gl_error_status("glBufferSubData");
+}
+
+Status GlRenderDevice::update_texture(RenderHandle handle, std::uint32_t mip_level,
+                                      std::span<const std::byte> data) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (!initialized_) {
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
+    }
+    if (!handle_live(handle)) {
+        return Status::fail(ErrorCode::NotFound, "texture handle is not live");
+    }
+    auto* resource = find(handle.index);
+    if (resource->kind != Kind::Texture) {
+        return Status::fail(ErrorCode::InvalidArgument, "handle is not a texture");
+    }
+    if (mip_level >= resource->mip_levels) {
+        return Status::fail(ErrorCode::OutOfRange, "mip level is out of range");
+    }
+    GlFormat format{};
+    if (!pixel_format(static_cast<PixelFormat>(resource->pixel_format), format)) {
+        return Status::fail(ErrorCode::InvalidArgument, "unsupported pixel format");
+    }
+    const std::uint64_t expected =
+        static_cast<std::uint64_t>(mip_dimension(resource->width, mip_level)) *
+        mip_dimension(resource->height, mip_level) * format.bytes_per_pixel;
+    if (data.size() != expected) {
+        return Status::fail(ErrorCode::OutOfRange, "texture data size does not match mip level");
+    }
+    glBindTexture(GL_TEXTURE_2D, resource->gl_id);
+    glTexSubImage2D(GL_TEXTURE_2D, static_cast<GLint>(mip_level), 0, 0,
+                    static_cast<GLsizei>(mip_dimension(resource->width, mip_level)),
+                    static_cast<GLsizei>(mip_dimension(resource->height, mip_level)), format.format,
+                    format.type, data.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return gl_error_status("glTexSubImage2D");
 }
 
 Status GlRenderDevice::begin_frame() {
@@ -602,6 +707,15 @@ Status GlRenderDevice::draw(const DrawCall& call) {
                                           !handle_live(call.uniform_buffer))) {
         return Status::fail(ErrorCode::NotFound, "uniform buffer handle is not live");
     }
+    for (std::uint32_t i = 0; i < call.texture_count; ++i) {
+        const auto* texture = is_valid(call.textures[i]) ? find(call.textures[i].index) : nullptr;
+        const auto* sampler = is_valid(call.samplers[i]) ? find(call.samplers[i].index) : nullptr;
+        if (texture == nullptr || texture->kind != Kind::Texture ||
+            !handle_live(call.textures[i]) || sampler == nullptr ||
+            sampler->kind != Kind::Sampler || !handle_live(call.samplers[i])) {
+            return Status::fail(ErrorCode::NotFound, "texture/sampler handle is not live");
+        }
+    }
 
     glBindVertexArray(vao_);
     glUseProgram(pipeline->gl_id);
@@ -649,15 +763,32 @@ Status GlRenderDevice::draw(const DrawCall& call) {
         }
     }
 
+    for (std::uint32_t i = 0; i < call.texture_count; ++i) {
+        const auto* texture = find(call.textures[i].index);
+        const auto* sampler = find(call.samplers[i].index);
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, texture->gl_id);
+        glBindSampler(i, sampler->gl_id);
+    }
+
     const std::uint32_t mode = primitive_mode(pipeline->topology);
+    const GLenum index_type =
+        call.index_type == IndexType::UInt16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
     if (call.index_count > 0) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices->gl_id);
-        glDrawElementsInstanced(mode, static_cast<GLsizei>(call.index_count), GL_UNSIGNED_INT,
-                                nullptr, static_cast<GLsizei>(call.instance_count));
+        glDrawElementsInstanced(mode, static_cast<GLsizei>(call.index_count), index_type, nullptr,
+                                static_cast<GLsizei>(call.instance_count));
     } else {
         glDrawArraysInstanced(mode, 0, static_cast<GLsizei>(call.vertex_count),
                               static_cast<GLsizei>(call.instance_count));
     }
+
+    for (std::uint32_t i = 0; i < call.texture_count; ++i) {
+        glBindSampler(i, 0);
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    glActiveTexture(GL_TEXTURE0);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);

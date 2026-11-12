@@ -5,6 +5,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -31,15 +33,19 @@ layout(location = 0) in vec3 aPos;
 layout(set = 0, binding = 0, std140) uniform Camera {
     mat4 mvp;
 } camera;
+layout(location = 0) out vec2 vUv;
 void main() {
     gl_Position = camera.mvp * vec4(aPos, 1.0);
+    vUv = aPos.xy * 0.5 + 0.5;
 }
 )";
 
 constexpr const char* kFragmentShader = R"(#version 450
+layout(location = 0) in vec2 vUv;
 layout(location = 0) out vec4 outColor;
+layout(set = 0, binding = 1) uniform sampler2D uTex;
 void main() {
-    outColor = vec4(0.15, 0.55, 0.95, 1.0);
+    outColor = texture(uTex, vUv);
 }
 )";
 
@@ -56,6 +62,13 @@ constexpr float kIdentityMvp[16] = {
     0.0f, 0.0f, 1.0f, 0.0f, //
     0.0f, 0.0f, 0.0f, 1.0f, //
 };
+
+// 4x4 RGBA8 checkerboard, generated at startup (64 bytes).
+constexpr std::uint32_t kCheckerSize = 4;
+
+std::uint8_t checker_texel(std::uint32_t x, std::uint32_t y) {
+    return ((x ^ y) & 1) != 0 ? 235 : 45;
+}
 
 int run(int argc, char** argv) {
     int frame_limit = -1;
@@ -152,6 +165,7 @@ int run(int argc, char** argv) {
     int exit_code = 0;
     {
         auto device = std::make_unique<poko::VulkanRenderDevice>(instance, phys, surface);
+        poko::VulkanRenderDevice* vk_device = device.get();
         if (!device->initialize()) {
             std::cerr << "Vulkan device initialization failed\n";
             exit_code = 1;
@@ -212,36 +226,85 @@ int run(int argc, char** argv) {
                                 std::cerr << "uniform buffer creation/upload failed\n";
                                 exit_code = 1;
                             } else {
-                                poko::DrawCall call;
-                                call.pipeline = pipeline.value();
-                                call.vertex_buffer = vb.value();
-                                call.uniform_buffer = ubo.value();
-                                call.vertex_count = 3;
-                                renderer.submission().submit(call);
-                                bool running = true;
-                                int frames = 0;
-                                while (running) {
-                                    SDL_Event event;
-                                    while (SDL_PollEvent(&event)) {
-                                        if (event.type == SDL_EVENT_QUIT ||
-                                            event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                                            running = false;
-                                        }
+                                std::array<std::uint8_t, kCheckerSize * kCheckerSize * 4> checker{};
+                                for (std::uint32_t y = 0; y < kCheckerSize; ++y) {
+                                    for (std::uint32_t x = 0; x < kCheckerSize; ++x) {
+                                        const std::uint8_t v = checker_texel(x, y);
+                                        const std::size_t px = (y * kCheckerSize + x) * 4;
+                                        checker[px + 0] = v;
+                                        checker[px + 1] = v;
+                                        checker[px + 2] = v;
+                                        checker[px + 3] = 255;
                                     }
-                                    if (!running || (frame_limit >= 0 && frames >= frame_limit)) {
-                                        break;
-                                    }
-                                    const auto st = renderer.render_frame(
-                                        poko::ClearValue{0.08f, 0.09f, 0.12f, 1.0f});
-                                    if (!st.ok()) {
-                                        std::cerr << "render_frame failed: " << st.error().message
-                                                  << '\n';
-                                        exit_code = 1;
-                                        break;
-                                    }
-                                    ++frames;
                                 }
-                                std::cout << "frames rendered: " << frames << std::endl;
+                                const auto texture = renderer.device().create_texture(
+                                    poko::TextureDesc{kCheckerSize, kCheckerSize, 1, 1, 1,
+                                                      poko::PixelFormat::RGBA8, "checker.tex"});
+                                const auto sampler =
+                                    renderer.device().create_sampler(poko::SamplerDesc{});
+                                const std::span<const std::byte> tex_bytes{
+                                    reinterpret_cast<const std::byte*>(checker.data()),
+                                    checker.size()};
+                                const bool tex_ok =
+                                    texture.ok() && sampler.ok() &&
+                                    renderer.device()
+                                        .update_texture(texture.value(), 0, tex_bytes)
+                                        .ok();
+                                if (!tex_ok) {
+                                    std::cerr << "texture creation/upload failed\n";
+                                    exit_code = 1;
+                                }
+                                if (tex_ok) {
+                                    poko::DrawCall call;
+                                    call.pipeline = pipeline.value();
+                                    call.vertex_buffer = vb.value();
+                                    call.uniform_buffer = ubo.value();
+                                    call.textures[0] = texture.value();
+                                    call.samplers[0] = sampler.value();
+                                    call.texture_count = 1;
+                                    call.vertex_count = 3;
+                                    renderer.submission().submit(call);
+                                    bool running = true;
+                                    int frames = 0;
+                                    while (running) {
+                                        SDL_Event event;
+                                        while (SDL_PollEvent(&event)) {
+                                            if (event.type == SDL_EVENT_QUIT ||
+                                                event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                                                running = false;
+                                            } else if (event.type ==
+                                                       SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+                                                int new_w = 0;
+                                                int new_h = 0;
+                                                SDL_GetWindowSizeInPixels(window, &new_w, &new_h);
+                                                const auto resize = vk_device->recreate_swapchain(
+                                                    static_cast<std::uint32_t>(new_w),
+                                                    static_cast<std::uint32_t>(new_h));
+                                                if (!resize.ok()) {
+                                                    std::cerr << "swapchain resize failed: "
+                                                              << resize.error().message << '\n';
+                                                    exit_code = 1;
+                                                    running = false;
+                                                }
+                                            }
+                                        }
+                                        if (!running ||
+                                            (frame_limit >= 0 && frames >= frame_limit)) {
+                                            break;
+                                        }
+                                        const auto st = renderer.render_frame(
+                                            poko::ClearValue{0.08f, 0.09f, 0.12f, 1.0f});
+                                        if (!st.ok()) {
+                                            std::cerr
+                                                << "render_frame failed: " << st.error().message
+                                                << '\n';
+                                            exit_code = 1;
+                                            break;
+                                        }
+                                        ++frames;
+                                    }
+                                    std::cout << "frames rendered: " << frames << std::endl;
+                                }
                             }
                         }
                     }

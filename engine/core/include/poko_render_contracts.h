@@ -87,6 +87,22 @@ enum class CompareOp : std::uint8_t {
     Always,
 };
 
+enum class IndexType : std::uint8_t {
+    UInt16,
+    UInt32,
+};
+
+enum class FilterMode : std::uint8_t {
+    Nearest,
+    Linear,
+};
+
+enum class WrapMode : std::uint8_t {
+    Repeat,
+    ClampToEdge,
+    MirroredRepeat,
+};
+
 struct BufferDesc {
     std::uint64_t size_bytes = 0;
     BufferUsage usage = BufferUsage::Vertex;
@@ -139,6 +155,14 @@ struct PipelineDesc {
     std::string_view debug_name;
 };
 
+struct SamplerDesc {
+    FilterMode min_filter = FilterMode::Linear;
+    FilterMode mag_filter = FilterMode::Linear;
+    WrapMode wrap_u = WrapMode::Repeat;
+    WrapMode wrap_v = WrapMode::Repeat;
+    std::string_view debug_name;
+};
+
 struct ClearValue {
     float r = 0.0f;
     float g = 0.0f;
@@ -173,6 +197,13 @@ struct DrawCall {
     // means no uniforms are bound.
     RenderHandle uniform_buffer;
     std::uint64_t uniform_offset = 0;
+    // Optional textures bound at slots 0..texture_count-1; samplers[i] pairs
+    // with textures[i]. Invalid handles in the used range are rejected.
+    static constexpr std::size_t kMaxDrawTextures = 4;
+    std::array<RenderHandle, kMaxDrawTextures> textures{};
+    std::array<RenderHandle, kMaxDrawTextures> samplers{};
+    std::uint32_t texture_count = 0;
+    IndexType index_type = IndexType::UInt32;
     std::uint32_t vertex_count = 0;
     std::uint32_t index_count = 0;
     std::uint32_t instance_count = 1;
@@ -219,7 +250,8 @@ inline bool valid(const VertexLayout& layout) noexcept {
 
 inline bool valid(const DrawCall& call) noexcept {
     return is_valid(call.pipeline) && call.instance_count > 0 &&
-           (call.vertex_count > 0 || call.index_count > 0);
+           (call.vertex_count > 0 || call.index_count > 0) &&
+           call.texture_count <= DrawCall::kMaxDrawTextures;
 }
 
 } // namespace poko

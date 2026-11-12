@@ -23,6 +23,7 @@ public:
         Texture,
         Shader,
         Pipeline,
+        Sampler,
     };
 
     NullRenderDevice();
@@ -37,9 +38,12 @@ public:
     Result<RenderHandle> create_texture(const TextureDesc& desc) override;
     Result<RenderHandle> create_shader(const ShaderDesc& desc) override;
     Result<RenderHandle> create_pipeline(const PipelineDesc& desc) override;
+    Result<RenderHandle> create_sampler(const SamplerDesc& desc) override;
     Status destroy(RenderHandle handle) override;
     Status update_buffer(RenderHandle handle, std::span<const std::byte> data,
                          std::uint64_t offset_bytes = 0) override;
+    Status update_texture(RenderHandle handle, std::uint32_t mip_level,
+                          std::span<const std::byte> data) override;
 
     Status begin_frame() override;
     Status clear(const ClearValue& value) override;

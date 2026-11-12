@@ -17,13 +17,27 @@ void SceneSubmission::clear() noexcept {
 }
 
 bool SceneSubmission::same_batch(const DrawCall& a, const DrawCall& b) noexcept {
-    return a.pipeline.index == b.pipeline.index && a.pipeline.generation == b.pipeline.generation &&
-           a.vertex_buffer.index == b.vertex_buffer.index &&
-           a.vertex_buffer.generation == b.vertex_buffer.generation &&
-           a.index_buffer.index == b.index_buffer.index &&
-           a.index_buffer.generation == b.index_buffer.generation &&
-           a.vertex_count == b.vertex_count && a.index_count == b.index_count &&
-           a.sort_key == b.sort_key;
+    if (a.pipeline.index != b.pipeline.index || a.pipeline.generation != b.pipeline.generation ||
+        a.vertex_buffer.index != b.vertex_buffer.index ||
+        a.vertex_buffer.generation != b.vertex_buffer.generation ||
+        a.index_buffer.index != b.index_buffer.index ||
+        a.index_buffer.generation != b.index_buffer.generation ||
+        a.uniform_buffer.index != b.uniform_buffer.index ||
+        a.uniform_buffer.generation != b.uniform_buffer.generation ||
+        a.uniform_offset != b.uniform_offset || a.index_type != b.index_type ||
+        a.texture_count != b.texture_count || a.vertex_count != b.vertex_count ||
+        a.index_count != b.index_count || a.sort_key != b.sort_key) {
+        return false;
+    }
+    for (std::uint32_t i = 0; i < a.texture_count; ++i) {
+        if (a.textures[i].index != b.textures[i].index ||
+            a.textures[i].generation != b.textures[i].generation ||
+            a.samplers[i].index != b.samplers[i].index ||
+            a.samplers[i].generation != b.samplers[i].generation) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void SceneSubmission::batch() {

@@ -135,6 +135,62 @@ VkCompareOp vk_compare(CompareOp op) noexcept {
     return VK_COMPARE_OP_LESS_OR_EQUAL;
 }
 
+VkFilter vk_filter(FilterMode mode) noexcept {
+    return mode == FilterMode::Nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+}
+
+VkSamplerAddressMode vk_address(WrapMode mode) noexcept {
+    switch (mode) {
+    case WrapMode::Repeat:
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case WrapMode::ClampToEdge:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case WrapMode::MirroredRepeat:
+        return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    }
+    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+}
+
+// Bytes per pixel for the color formats update_texture can stage; depth
+// formats and unknown formats return 0 (not uploadable through this path).
+std::uint32_t vk_bpp(VkFormat format) noexcept {
+    switch (format) {
+    case VK_FORMAT_R8_UNORM:
+        return 1;
+    case VK_FORMAT_R8G8B8_UNORM:
+        return 3;
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+        return 4;
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+        return 8;
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return 16;
+    default:
+        return 0;
+    }
+}
+
+std::uint32_t mip_dimension(std::uint32_t base, std::uint32_t level) noexcept {
+    if (level >= 32) {
+        return 1;
+    }
+    const std::uint32_t dim = base >> level;
+    return dim == 0 ? 1 : dim;
+}
+
+// First memory type satisfying `required` property bits, or UINT32_MAX.
+std::uint32_t find_memory_type(const VkPhysicalDeviceMemoryProperties& mem, std::uint32_t type_bits,
+                               VkMemoryPropertyFlags required) noexcept {
+    for (std::uint32_t t = 0; t < mem.memoryTypeCount; ++t) {
+        if ((type_bits & (1u << t)) != 0 &&
+            (mem.memoryTypes[t].propertyFlags & required) == required) {
+            return t;
+        }
+    }
+    return UINT32_MAX;
+}
+
 VkFormat vk_attrib_format(std::uint32_t components) noexcept {
     // Attributes are 32-bit float tuples (same assumption as the GL backend).
     switch (components) {
@@ -153,6 +209,8 @@ VkFormat vk_attrib_format(std::uint32_t components) noexcept {
 
 // Maximum descriptor sets (one per draw call) allocatable per frame slot.
 constexpr std::uint32_t kMaxUniformSetsPerFrame = 256;
+// Descriptor set 0 bindings: 0 = uniform buffer, 1..N = texture/sampler pairs.
+constexpr std::uint32_t kMaxDescriptorBindings = 1 + DrawCall::kMaxDrawTextures;
 
 // Compiles GLSL source to SPIR-V via glslang. Returns false on failure with
 // the log appended to `log_out`.
@@ -277,6 +335,11 @@ void VulkanRenderDevice::destroy_resource_objects(Resource& resource) {
             vkDestroyPipeline(dev, static_cast<VkPipeline>(resource.object), nullptr);
         }
         break;
+    case Kind::Sampler:
+        if (resource.object != nullptr) {
+            vkDestroySampler(dev, static_cast<VkSampler>(resource.object), nullptr);
+        }
+        break;
     }
     resource.object = resource.object2 = resource.object3 = nullptr;
 }
@@ -342,16 +405,23 @@ bool VulkanRenderDevice::initialize() noexcept {
     }
     command_pool_ = command_pool;
 
-    // Descriptor set 0: one uniform buffer at binding 0, visible to both
-    // stages. DrawCall::uniform_buffer lands here.
-    VkDescriptorSetLayoutBinding ubo_binding{};
-    ubo_binding.binding = 0;
-    ubo_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ubo_binding.descriptorCount = 1;
-    ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Descriptor set 0: binding 0 is one uniform buffer; bindings 1..4 are
+    // combined image samplers for DrawCall::textures[0..3]. Visible to both
+    // stages so vertex-stage sampling keeps working.
+    VkDescriptorSetLayoutBinding bindings[kMaxDescriptorBindings]{};
+    bindings[0].binding = 0;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    for (std::uint32_t i = 1; i < kMaxDescriptorBindings; ++i) {
+        bindings[i].binding = i;
+        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        bindings[i].descriptorCount = 1;
+        bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
     VkDescriptorSetLayoutCreateInfo dsl_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    dsl_info.bindingCount = 1;
-    dsl_info.pBindings = &ubo_binding;
+    dsl_info.bindingCount = kMaxDescriptorBindings;
+    dsl_info.pBindings = bindings;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     if (vkCreateDescriptorSetLayout(device, &dsl_info, nullptr, &descriptor_set_layout) !=
         VK_SUCCESS) {
@@ -621,13 +691,18 @@ Status VulkanRenderDevice::create_swapchain_resources(std::uint32_t width, std::
         }
         fs.acquire_sem = acq;
         fs.render_sem = rnd;
-        // Descriptor pool for this slot's uniform-buffer sets; reset when the
-        // slot is reused in acquire_image after its fence has been waited.
-        VkDescriptorPoolSize pool_size{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kMaxUniformSetsPerFrame};
+        // Descriptor pool for this slot's sets; reset when the slot is reused
+        // in acquire_image after its fence has been waited. Sized for the
+        // worst case: every set carries one UBO plus all texture bindings.
+        VkDescriptorPoolSize pool_sizes[2]{};
+        pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pool_sizes[0].descriptorCount = kMaxUniformSetsPerFrame;
+        pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pool_sizes[1].descriptorCount = kMaxUniformSetsPerFrame * DrawCall::kMaxDrawTextures;
         VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
         pool_info.maxSets = kMaxUniformSetsPerFrame;
-        pool_info.poolSizeCount = 1;
-        pool_info.pPoolSizes = &pool_size;
+        pool_info.poolSizeCount = 2;
+        pool_info.pPoolSizes = pool_sizes;
         VkDescriptorPool dpool = VK_NULL_HANDLE;
         if (vkCreateDescriptorPool(dev, &pool_info, nullptr, &dpool) != VK_SUCCESS) {
             return Status::fail(ErrorCode::ResourceExhausted, "vkCreateDescriptorPool failed");
@@ -832,6 +907,33 @@ Result<RenderHandle> VulkanRenderDevice::create_texture(const TextureDesc& desc)
     resource.object2 = memory;
     resource.object3 = view;
     resource.format = static_cast<std::uint32_t>(format);
+    resource.width = desc.width;
+    resource.height = desc.height;
+    resource.mip_levels = desc.mip_levels;
+    return Result<RenderHandle>::success(make_handle(index, generations_[index]));
+}
+
+Result<RenderHandle> VulkanRenderDevice::create_sampler(const SamplerDesc& desc) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (!initialized_) {
+        return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition,
+                                          "device is not initialized");
+    }
+    auto* dev = static_cast<VkDevice>(device_);
+    VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    info.magFilter = vk_filter(desc.mag_filter);
+    info.minFilter = vk_filter(desc.min_filter);
+    info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    info.addressModeU = vk_address(desc.wrap_u);
+    info.addressModeV = vk_address(desc.wrap_v);
+    info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSampler sampler = VK_NULL_HANDLE;
+    if (vkCreateSampler(dev, &info, nullptr, &sampler) != VK_SUCCESS) {
+        return Result<RenderHandle>::fail(ErrorCode::ResourceExhausted, "vkCreateSampler failed");
+    }
+    const HandleIndex index = alloc_slot(Kind::Sampler);
+    auto& resource = resources_[index];
+    resource.object = sampler;
     return Result<RenderHandle>::success(make_handle(index, generations_[index]));
 }
 
@@ -1046,6 +1148,148 @@ Status VulkanRenderDevice::update_buffer(RenderHandle handle, std::span<const st
     return Status::success();
 }
 
+Status VulkanRenderDevice::update_texture(RenderHandle handle, std::uint32_t mip_level,
+                                          std::span<const std::byte> data) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (!initialized_) {
+        return Status::fail(ErrorCode::FailedPrecondition, "device is not initialized");
+    }
+    if (!handle_live(handle)) {
+        return Status::fail(ErrorCode::NotFound, "texture handle is not live");
+    }
+    auto* resource = find(handle.index);
+    if (resource->kind != Kind::Texture) {
+        return Status::fail(ErrorCode::InvalidArgument, "handle is not a texture");
+    }
+    if (mip_level >= resource->mip_levels) {
+        return Status::fail(ErrorCode::OutOfRange, "mip level is out of range");
+    }
+    const auto format = static_cast<VkFormat>(resource->format);
+    const std::uint32_t bpp = vk_bpp(format);
+    if (bpp == 0) {
+        return Status::fail(ErrorCode::Unsupported, "texture format is not uploadable");
+    }
+    const std::uint32_t level_w = mip_dimension(resource->width, mip_level);
+    const std::uint32_t level_h = mip_dimension(resource->height, mip_level);
+    const VkDeviceSize expected = static_cast<VkDeviceSize>(level_w) * level_h * bpp;
+    if (data.size() != expected) {
+        return Status::fail(ErrorCode::OutOfRange, "texture data size does not match mip level");
+    }
+
+    auto* dev = static_cast<VkDevice>(device_);
+    auto* phys = static_cast<VkPhysicalDevice>(physical_device_);
+    VkBuffer staging = VK_NULL_HANDLE;
+    VkDeviceMemory staging_mem = VK_NULL_HANDLE;
+    VkCommandBuffer cb = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
+
+    const Status result = [&]() -> Status {
+        // Staging buffer: host-visible coherent, filled by memcpy.
+        VkBufferCreateInfo buf_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        buf_info.size = expected;
+        buf_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if (vkCreateBuffer(dev, &buf_info, nullptr, &staging) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::ResourceExhausted, "vkCreateBuffer(staging) failed");
+        }
+        VkMemoryRequirements req{};
+        vkGetBufferMemoryRequirements(dev, staging, &req);
+        VkPhysicalDeviceMemoryProperties mem{};
+        vkGetPhysicalDeviceMemoryProperties(phys, &mem);
+        const std::uint32_t mem_type = find_memory_type(mem, req.memoryTypeBits,
+                                                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        if (mem_type == UINT32_MAX) {
+            return Status::fail(ErrorCode::ResourceExhausted,
+                                "no host-visible coherent memory for staging");
+        }
+        VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+        alloc.allocationSize = req.size;
+        alloc.memoryTypeIndex = mem_type;
+        if (vkAllocateMemory(dev, &alloc, nullptr, &staging_mem) != VK_SUCCESS ||
+            vkBindBufferMemory(dev, staging, staging_mem, 0) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::ResourceExhausted, "staging memory allocation failed");
+        }
+        void* mapped = nullptr;
+        if (vkMapMemory(dev, staging_mem, 0, expected, 0, &mapped) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "vkMapMemory(staging) failed");
+        }
+        std::memcpy(mapped, data.data(), data.size());
+        vkUnmapMemory(dev, staging_mem);
+
+        // One-shot command buffer: UNDEFINED -> TRANSFER_DST -> SHADER_READ_ONLY.
+        VkCommandBufferAllocateInfo cb_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        cb_info.commandPool = static_cast<VkCommandPool>(command_pool_);
+        cb_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cb_info.commandBufferCount = 1;
+        if (vkAllocateCommandBuffers(dev, &cb_info, &cb) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "vkAllocateCommandBuffers failed");
+        }
+        VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        if (vkBeginCommandBuffer(cb, &begin) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "vkBeginCommandBuffer failed");
+        }
+        const VkImage image = static_cast<VkImage>(resource->object);
+        VkImageMemoryBarrier to_dst{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        to_dst.srcAccessMask = 0;
+        to_dst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        to_dst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        to_dst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        to_dst.image = image;
+        to_dst.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mip_level, 1, 0, 1};
+        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0, 0, nullptr, 0, nullptr, 1, &to_dst);
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mip_level, 0, 1};
+        region.imageOffset = {0, 0, 0};
+        region.imageExtent = {level_w, level_h, 1};
+        vkCmdCopyBufferToImage(cb, staging, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                               &region);
+        VkImageMemoryBarrier to_read{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        to_read.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        to_read.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_read.image = image;
+        to_read.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mip_level, 1, 0, 1};
+        vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
+                             0, 0, nullptr, 0, nullptr, 1, &to_read);
+        if (vkEndCommandBuffer(cb) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "vkEndCommandBuffer failed");
+        }
+        VkFenceCreateInfo fence_info{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        if (vkCreateFence(dev, &fence_info, nullptr, &fence) != VK_SUCCESS) {
+            return Status::fail(ErrorCode::ResourceExhausted, "vkCreateFence failed");
+        }
+        VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &cb;
+        const VkQueue queue = static_cast<VkQueue>(queue_);
+        if (vkQueueSubmit(queue, 1, &submit, fence) != VK_SUCCESS ||
+            vkWaitForFences(dev, 1, &fence, VK_TRUE, std::numeric_limits<std::uint64_t>::max()) !=
+                VK_SUCCESS) {
+            return Status::fail(ErrorCode::Internal, "texture upload submit failed");
+        }
+        return Status::success();
+    }();
+
+    if (fence != VK_NULL_HANDLE) {
+        vkDestroyFence(dev, fence, nullptr);
+    }
+    if (cb != VK_NULL_HANDLE) {
+        vkFreeCommandBuffers(dev, static_cast<VkCommandPool>(command_pool_), 1, &cb);
+    }
+    if (staging_mem != VK_NULL_HANDLE) {
+        vkFreeMemory(dev, staging_mem, nullptr);
+    }
+    if (staging != VK_NULL_HANDLE) {
+        vkDestroyBuffer(dev, staging, nullptr);
+    }
+    return result;
+}
+
 Status VulkanRenderDevice::acquire_image() {
     auto* dev = static_cast<VkDevice>(device_);
     FrameSlot& slot = frame_slots_[frame_slot_ % frame_slots_.size()];
@@ -1173,6 +1417,15 @@ Status VulkanRenderDevice::draw(const DrawCall& call) {
     if (uniforms != nullptr && call.uniform_offset >= uniforms->aux) {
         return Status::fail(ErrorCode::OutOfRange, "uniform offset is out of range");
     }
+    for (std::uint32_t i = 0; i < call.texture_count; ++i) {
+        const auto* texture = is_valid(call.textures[i]) ? find(call.textures[i].index) : nullptr;
+        const auto* sampler = is_valid(call.samplers[i]) ? find(call.samplers[i].index) : nullptr;
+        if (texture == nullptr || texture->kind != Kind::Texture ||
+            !handle_live(call.textures[i]) || sampler == nullptr ||
+            sampler->kind != Kind::Sampler || !handle_live(call.samplers[i])) {
+            return Status::fail(ErrorCode::NotFound, "texture/sampler handle is not live");
+        }
+    }
     const Status pass_status = record_draws_into_pass();
     if (!pass_status.ok()) {
         return pass_status;
@@ -1182,7 +1435,7 @@ Status VulkanRenderDevice::draw(const DrawCall& call) {
     auto* dev = static_cast<VkDevice>(device_);
     vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       static_cast<VkPipeline>(pipeline->object));
-    if (uniforms != nullptr) {
+    if (uniforms != nullptr || call.texture_count > 0) {
         VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
         alloc_info.descriptorPool = static_cast<VkDescriptorPool>(slot.descriptor_pool);
         alloc_info.descriptorSetCount = 1;
@@ -1194,17 +1447,37 @@ Status VulkanRenderDevice::draw(const DrawCall& call) {
             return Status::fail(ErrorCode::ResourceExhausted,
                                 "vkAllocateDescriptorSets failed (frame uniform limit?)");
         }
+        VkWriteDescriptorSet writes[kMaxDescriptorBindings]{};
         VkDescriptorBufferInfo buffer_info{};
-        buffer_info.buffer = static_cast<VkBuffer>(uniforms->object);
-        buffer_info.offset = static_cast<VkDeviceSize>(call.uniform_offset);
-        buffer_info.range = static_cast<VkDeviceSize>(uniforms->aux - call.uniform_offset);
-        VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-        write.dstSet = set;
-        write.dstBinding = 0;
-        write.descriptorCount = 1;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        write.pBufferInfo = &buffer_info;
-        vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+        VkDescriptorImageInfo image_infos[DrawCall::kMaxDrawTextures]{};
+        std::uint32_t write_count = 0;
+        if (uniforms != nullptr) {
+            buffer_info.buffer = static_cast<VkBuffer>(uniforms->object);
+            buffer_info.offset = static_cast<VkDeviceSize>(call.uniform_offset);
+            buffer_info.range = static_cast<VkDeviceSize>(uniforms->aux - call.uniform_offset);
+            writes[write_count] = VkWriteDescriptorSet{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            writes[write_count].dstSet = set;
+            writes[write_count].dstBinding = 0;
+            writes[write_count].descriptorCount = 1;
+            writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[write_count].pBufferInfo = &buffer_info;
+            ++write_count;
+        }
+        for (std::uint32_t i = 0; i < call.texture_count; ++i) {
+            const auto* texture = find(call.textures[i].index);
+            const auto* sampler = find(call.samplers[i].index);
+            image_infos[i].sampler = static_cast<VkSampler>(sampler->object);
+            image_infos[i].imageView = static_cast<VkImageView>(texture->object3);
+            image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            writes[write_count] = VkWriteDescriptorSet{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            writes[write_count].dstSet = set;
+            writes[write_count].dstBinding = 1 + i;
+            writes[write_count].descriptorCount = 1;
+            writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[write_count].pImageInfo = &image_infos[i];
+            ++write_count;
+        }
+        vkUpdateDescriptorSets(dev, write_count, writes, 0, nullptr);
         vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 static_cast<VkPipelineLayout>(pipeline_layout_), 0, 1, &set, 0,
                                 nullptr);
@@ -1214,7 +1487,9 @@ Status VulkanRenderDevice::draw(const DrawCall& call) {
     vkCmdBindVertexBuffers(cb, 0, 1, &vb, &offset);
     if (call.index_count > 0) {
         VkBuffer ib = static_cast<VkBuffer>(indices->object);
-        vkCmdBindIndexBuffer(cb, ib, 0, VK_INDEX_TYPE_UINT32);
+        const VkIndexType index_type =
+            call.index_type == IndexType::UInt16 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+        vkCmdBindIndexBuffer(cb, ib, 0, index_type);
         vkCmdDrawIndexed(cb, call.index_count, call.instance_count, 0, 0, 0);
     } else {
         vkCmdDraw(cb, call.vertex_count, call.instance_count, 0, 0);

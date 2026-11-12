@@ -65,7 +65,7 @@ Result<RenderHandle> NullRenderDevice::create_texture(const TextureDesc& desc) {
     if (!valid(desc)) {
         return Result<RenderHandle>::fail(ErrorCode::InvalidArgument, "invalid texture descriptor");
     }
-    return create(ResourceKind::Texture);
+    return create(ResourceKind::Texture, desc.mip_levels);
 }
 
 Result<RenderHandle> NullRenderDevice::create_shader(const ShaderDesc& desc) {
@@ -84,6 +84,15 @@ Result<RenderHandle> NullRenderDevice::create_pipeline(const PipelineDesc& desc)
         return Result<RenderHandle>::fail(ErrorCode::NotFound, "shader handles are not live");
     }
     return create_unlocked(ResourceKind::Pipeline);
+}
+
+Result<RenderHandle> NullRenderDevice::create_sampler(const SamplerDesc& desc) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (device_lost_.load(std::memory_order_relaxed)) {
+        return Result<RenderHandle>::fail(ErrorCode::FailedPrecondition, "device is lost");
+    }
+    (void)desc;
+    return create_unlocked(ResourceKind::Sampler);
 }
 
 Status NullRenderDevice::destroy(RenderHandle handle) {
@@ -125,6 +134,25 @@ Status NullRenderDevice::update_buffer(RenderHandle handle, std::span<const std:
         return Status::fail(ErrorCode::OutOfRange, "buffer update is out of range");
     }
     ++buffer_updates_;
+    return Status::success();
+}
+
+Status NullRenderDevice::update_texture(RenderHandle handle, std::uint32_t mip_level,
+                                        std::span<const std::byte> data) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (device_lost_.load(std::memory_order_relaxed)) {
+        return Status::fail(ErrorCode::FailedPrecondition, "device is lost");
+    }
+    if (!handle_live(handle)) {
+        return Status::fail(ErrorCode::NotFound, "texture handle is not live");
+    }
+    const auto& resource = resources_[handle.index];
+    if (resource.kind != ResourceKind::Texture) {
+        return Status::fail(ErrorCode::InvalidArgument, "handle is not a texture");
+    }
+    if (data.empty() || mip_level >= resource.size_bytes) {
+        return Status::fail(ErrorCode::OutOfRange, "texture update is out of range");
+    }
     return Status::success();
 }
 
