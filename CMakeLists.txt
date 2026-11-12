@@ -46,6 +46,7 @@ add_subdirectory(engine/animation)
 add_subdirectory(engine/input)
 add_subdirectory(engine/audio)
 add_subdirectory(engine/lighting)
+add_subdirectory(engine/camera)
 
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)
