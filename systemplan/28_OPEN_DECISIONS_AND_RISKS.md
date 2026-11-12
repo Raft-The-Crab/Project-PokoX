@@ -12,6 +12,12 @@
 - Pokoins transferability/cash equivalence.
 - Reward eligibility, caps and total budget.
 - Production hosting and paid fallback strategy.
+- Pin miniaudio / Asio (immutable revision, SHA-256, licence notice) before adding
+  OS audio output or socket I/O. Both are `NOT VENDORED` in
+  `third_party/DEPENDENCIES.md`; `29` lists them only as "ecosystem considered".
+  Until pinned, engine backends implement deterministic, stdlib-only subsystem
+  logic behind the existing seams and defer vendor/OS I/O. No version or hash
+  may be guessed (see the pinning policy in `DEPENDENCIES.md`).
 
 ## Risks
 Overbuilding engine before playable validation; free hosting instability; custom physics/protocol defects; package migration problems; unsafe untrusted execution; debug UI shipping accidentally; accessibility feedback arriving too late; backend services proliferating without ownership.
