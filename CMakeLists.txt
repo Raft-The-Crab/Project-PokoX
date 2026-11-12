@@ -42,6 +42,7 @@ add_subdirectory(engine/physics)
 add_subdirectory(engine/assets)
 add_subdirectory(engine/scene)
 add_subdirectory(engine/ecs)
+add_subdirectory(engine/animation)
 
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)

@@ -13,7 +13,8 @@ set(_poko_unit_sources
     asset_contracts_test.cpp
     assets_null_provider_test.cpp
     scene_graph_test.cpp
-    ecs_registry_test.cpp)
+    ecs_registry_test.cpp
+    animation_clip_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -46,6 +47,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     endif()
     if(TARGET poko_ecs)
         target_link_libraries(poko_test_${_poko_name} PRIVATE poko_ecs)
+    endif()
+    if(TARGET poko_animation)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_animation)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
