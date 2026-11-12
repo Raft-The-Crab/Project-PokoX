@@ -40,7 +40,10 @@ if(POKO_RENDER_OPENGL)
     target_link_libraries(poko_gl3w PUBLIC OpenGL::GL)
     set_target_properties(poko_gl3w PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON)
 
-    add_library(poko_render_gl STATIC src/gl_device.cpp)
+    add_library(poko_render_gl STATIC src/gl_device.cpp
+        src/gl_resources.cpp
+        src/gl_uploads.cpp
+        src/gl_draw.cpp)
     target_include_directories(poko_render_gl PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
     target_link_libraries(poko_render_gl PUBLIC poko_core poko_gl3w OpenGL::GL)

@@ -1,6 +1,7 @@
 # Compression codec registry skeleton (systemplan/13): store codec only.
 add_library(poko_compression STATIC
-    src/compression.cpp)
+    src/store_codec.cpp
+    src/registry.cpp)
 
 target_include_directories(poko_compression PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

@@ -1,7 +1,9 @@
 # Asset provider seam (systemplan/05). Only the MOCK backend exists so far;
 # the real pipeline (import/validate/convert/cache) is planned.
 add_library(poko_assets_null STATIC
-    src/provider.cpp)
+    src/assets.cpp
+    src/requests.cpp
+    src/payload.cpp)
 
 target_include_directories(poko_assets_null PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

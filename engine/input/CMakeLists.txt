@@ -1,6 +1,7 @@
 # Platform-agnostic input skeleton (Phase 1): events + per-frame state.
 add_library(poko_input STATIC
-    src/input.cpp)
+    src/events.cpp
+    src/state.cpp)
 
 target_include_directories(poko_input PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

@@ -1,6 +1,7 @@
 # AI skeleton (Phase 1): FSM + blackboard; utility AI/BT come later.
 add_library(poko_ai STATIC
-    src/ai.cpp)
+    src/blackboard.cpp
+    src/state_machine.cpp)
 
 target_include_directories(poko_ai PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

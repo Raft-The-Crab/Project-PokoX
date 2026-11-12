@@ -1,6 +1,7 @@
 # Scene graph skeleton (systemplan/08): hierarchy + transforms, pure logic.
 add_library(poko_scene STATIC
-    src/graph.cpp)
+    src/nodes.cpp
+    src/transforms.cpp)
 
 target_include_directories(poko_scene PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

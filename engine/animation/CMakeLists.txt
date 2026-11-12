@@ -1,6 +1,7 @@
 # Animation clip sampling skeleton (systemplan/07): deterministic keyframes.
 add_library(poko_animation STATIC
-    src/animation.cpp)
+    src/validation.cpp
+    src/sampling.cpp)
 
 target_include_directories(poko_animation PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

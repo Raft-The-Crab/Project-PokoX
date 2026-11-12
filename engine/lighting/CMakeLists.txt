@@ -1,6 +1,7 @@
 # Scene light list skeleton (systemplan/04): forward lighting contracts.
 add_library(poko_lighting STATIC
-    src/light_list.cpp)
+    src/lights.cpp
+    src/frame.cpp)
 
 target_include_directories(poko_lighting PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

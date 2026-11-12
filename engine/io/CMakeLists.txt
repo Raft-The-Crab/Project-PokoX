@@ -1,6 +1,7 @@
 # Async file IO skeleton (Phase 1): queued reads over IPlatformFileSystem.
 add_library(poko_io STATIC
-    src/async_io.cpp)
+    src/requests.cpp
+    src/update.cpp)
 
 target_include_directories(poko_io PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

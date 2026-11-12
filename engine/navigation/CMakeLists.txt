@@ -1,6 +1,7 @@
 # Waypoint nav graph + A* skeleton (Phase 1): deterministic path queries.
 add_library(poko_navigation STATIC
-    src/nav_graph.cpp)
+    src/graph.cpp
+    src/pathfinding.cpp)
 
 target_include_directories(poko_navigation PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

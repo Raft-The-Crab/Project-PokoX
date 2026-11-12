@@ -1,6 +1,7 @@
 # Gameplay camera rig skeleton (Phase 1): orbit/top-down/fly pose source.
 add_library(poko_camera STATIC
-    src/rig.cpp)
+    src/controls.cpp
+    src/pose.cpp)
 
 target_include_directories(poko_camera PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

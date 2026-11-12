@@ -1,6 +1,7 @@
 # Post-process chain skeleton (systemplan/04): ordered screen-space effects.
 add_library(poko_postprocess STATIC
-    src/chain.cpp)
+    src/slots.cpp
+    src/frame.cpp)
 
 target_include_directories(poko_postprocess PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

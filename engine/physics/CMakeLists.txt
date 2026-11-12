@@ -1,7 +1,9 @@
 # Physics world seam (systemplan/06). Only the MOCK backend exists so far;
 # the custom physics module is planned (open decision in systemplan/28).
 add_library(poko_physics_null STATIC
-    src/world.cpp)
+    src/bodies.cpp
+    src/raycast.cpp
+    src/step.cpp)
 
 target_include_directories(poko_physics_null PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

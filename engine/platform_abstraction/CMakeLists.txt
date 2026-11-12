@@ -1,5 +1,6 @@
 add_library(poko_platform STATIC
-    src/fs.cpp)
+    src/resolve.cpp
+    src/io.cpp)
 
 target_include_directories(poko_platform PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

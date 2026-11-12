@@ -1,7 +1,8 @@
 # Audio device seam (systemplan/07). Only the MOCK backend exists so far;
 # miniaudio is the planned production backend.
 add_library(poko_audio_null STATIC
-    src/device.cpp)
+    src/sounds.cpp
+    src/playback.cpp)
 
 target_include_directories(poko_audio_null PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

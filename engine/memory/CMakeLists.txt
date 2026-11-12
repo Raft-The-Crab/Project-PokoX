@@ -1,6 +1,6 @@
 # Memory allocators skeleton (Phase 1): arena + fixed pools.
 add_library(poko_memory STATIC
-    src/allocators.cpp)
+    src/arena.cpp)
 
 target_include_directories(poko_memory PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

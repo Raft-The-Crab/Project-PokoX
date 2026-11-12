@@ -1,7 +1,8 @@
 # Network transport seam (systemplan/10). Only the MOCK backend exists so
 # far; Asio is the planned production transport.
 add_library(poko_net_null STATIC
-    src/transport.cpp)
+    src/endpoints.cpp
+    src/packets.cpp)
 
 target_include_directories(poko_net_null PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

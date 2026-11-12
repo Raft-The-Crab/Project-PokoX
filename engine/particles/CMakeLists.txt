@@ -1,6 +1,7 @@
 # CPU particle emitter skeleton (Phase 1): deterministic simulation.
 add_library(poko_particles STATIC
-    src/particles.cpp)
+    src/spawn.cpp
+    src/update.cpp)
 
 target_include_directories(poko_particles PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
