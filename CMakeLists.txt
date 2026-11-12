@@ -50,6 +50,7 @@ add_subdirectory(engine/camera)
 add_subdirectory(engine/particles)
 add_subdirectory(engine/memory)
 add_subdirectory(engine/io)
+add_subdirectory(engine/postprocess)
 
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)
