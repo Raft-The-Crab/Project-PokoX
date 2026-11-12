@@ -25,7 +25,9 @@ set(_poko_unit_sources
     memory_allocators_test.cpp
     io_async_test.cpp
     postprocess_contracts_test.cpp
-    postprocess_chain_test.cpp)
+    postprocess_chain_test.cpp
+    net_contracts_test.cpp
+    net_null_transport_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -85,6 +87,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     endif()
     if(TARGET poko_postprocess)
         target_link_libraries(poko_test_${_poko_name} PRIVATE poko_postprocess)
+    endif()
+    if(TARGET poko_net_null)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_net_null)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)

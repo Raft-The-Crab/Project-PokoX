@@ -17,6 +17,7 @@
 
 #include "poko_asset_contracts.h"
 #include "poko_audio_contracts.h"
+#include "poko_net_contracts.h"
 #include "poko_physics_contracts.h"
 #include "poko_render_contracts.h"
 #include "poko_result.h"
@@ -167,9 +168,31 @@ public:
     virtual AudioStats stats() const = 0;
 };
 
+// Phase 1 (networking, systemplan/10): transport boundary. Asio is the
+// planned production transport; a MOCK NullNetworkTransport implements it
+// for offline tests. Payloads are opaque bytes; ordering is per-channel.
 class INetworkTransport {
 public:
     virtual ~INetworkTransport() = default;
+
+    // Binds a listen socket; host may be "" (any) or an address literal.
+    virtual Result<EndpointId> listen(std::string_view address, std::uint16_t port) = 0;
+    // Connects to a remote endpoint; returns a local endpoint id for sends.
+    virtual Result<EndpointId> connect(std::string_view address, std::uint16_t port) = 0;
+    virtual Status close(EndpointId endpoint) = 0;
+
+    virtual TransportState state(EndpointId endpoint) const = 0;
+
+    // Queues a datagram; payload is copied. Returns a packet id or fails.
+    virtual Result<PacketId> send(EndpointId to, ChannelId channel,
+                                  std::span<const std::byte> payload) = 0;
+
+    // Drains inbound packets; returns count delivered via `out` callback.
+    virtual std::uint32_t
+    receive(const std::function<void(const PacketDesc&, std::span<const std::byte>)>& out) = 0;
+
+    // Pumps sockets; backends may also deliver on workers.
+    virtual void update() = 0;
 };
 
 class IScriptRuntime {
