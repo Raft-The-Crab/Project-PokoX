@@ -30,7 +30,8 @@ set(_poko_unit_sources
     net_null_transport_test.cpp
     compression_codec_test.cpp
     nav_graph_test.cpp
-    character_motor_test.cpp)
+    character_motor_test.cpp
+    reflection_registry_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -102,6 +103,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     endif()
     if(TARGET poko_character)
         target_link_libraries(poko_test_${_poko_name} PRIVATE poko_character)
+    endif()
+    if(TARGET poko_reflection)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_reflection)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
