@@ -21,7 +21,8 @@ set(_poko_unit_sources
     light_contracts_test.cpp
     light_list_test.cpp
     camera_rig_test.cpp
-    particles_emitter_test.cpp)
+    particles_emitter_test.cpp
+    memory_allocators_test.cpp)
 
 # The renderer is excluded from the headless Server configuration, so its
 # tests are conditional on the target existing.
@@ -72,6 +73,9 @@ foreach(_poko_src IN LISTS _poko_unit_sources)
     endif()
     if(TARGET poko_particles)
         target_link_libraries(poko_test_${_poko_name} PRIVATE poko_particles)
+    endif()
+    if(TARGET poko_memory)
+        target_link_libraries(poko_test_${_poko_name} PRIVATE poko_memory)
     endif()
     target_include_directories(poko_test_${_poko_name} PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/harness)
