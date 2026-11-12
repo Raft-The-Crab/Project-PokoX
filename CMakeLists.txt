@@ -56,6 +56,7 @@ add_subdirectory(engine/compression)
 add_subdirectory(engine/navigation)
 add_subdirectory(engine/character)
 add_subdirectory(engine/reflection)
+add_subdirectory(engine/ai)
 
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)
