@@ -80,7 +80,6 @@ if(POKO_BUILD_DEMOS AND NOT POKO_SERVER_CONFIG)
 endif()
 
 if(POKO_BUILD_TESTS)
-    add_subdirectory(tests/unit)
 endif()
 
 poko_print_target_summary()

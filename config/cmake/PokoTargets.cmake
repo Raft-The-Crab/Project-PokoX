@@ -64,3 +64,23 @@ function(poko_print_target_summary)
         endif()
     endforeach()
 endfunction()
+
+# Registers one test executable per source in a module's tests/ directory.
+# Usage: poko_add_unit_tests(<primary_link_target>
+#            TEST_SOURCES <file>... [LINK_LIBS <lib>...])
+function(poko_add_unit_tests primary_target)
+    cmake_parse_arguments(ARG "" "" "TEST_SOURCES;LINK_LIBS" ${ARGN})
+    foreach(_src IN LISTS ARG_TEST_SOURCES)
+        get_filename_component(_name "${_src}" NAME_WE)
+        add_executable(poko_test_${_name}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/${_src})
+        target_link_libraries(poko_test_${_name} PRIVATE
+            ${primary_target} ${ARG_LINK_LIBS})
+        target_include_directories(poko_test_${_name} PRIVATE
+            ${PROJECT_SOURCE_DIR}/tests/harness)
+        poko_apply_common(poko_test_${_name})
+        poko_set_impl_label(poko_test_${_name} LOCAL_DEV)
+        add_test(NAME unit.${_name} COMMAND poko_test_${_name})
+        set_tests_properties(unit.${_name} PROPERTIES LABELS unit)
+    endforeach()
+endfunction()

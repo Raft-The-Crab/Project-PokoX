@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string_view>
 
-#include "poko_version.h"
+#include "poko/core/version.h"
 
 #ifndef POKO_IMPL_LABEL
 #define POKO_IMPL_LABEL "STUB"

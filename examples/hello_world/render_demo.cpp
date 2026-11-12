@@ -1,9 +1,9 @@
 #include <iostream>
 #include <memory>
 
-#include "poko_render_device.h"
-#include "poko_renderer.h"
-#include "poko_result.h"
+#include "poko/renderer/render_device.h"
+#include "poko/renderer/renderer.h"
+#include "poko/core/result.h"
 
 // Console "playable test scene" stand-in for the renderer foundation
 // (systemplan/04, systemplan/27 Phase 1). It exercises resource creation,

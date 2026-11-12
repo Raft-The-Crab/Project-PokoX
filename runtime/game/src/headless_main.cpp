@@ -4,17 +4,17 @@
 #include <iostream>
 #include <memory>
 
-#include "poko_assert.h"
-#include "poko_build_config.h"
-#include "poko_clock.h"
-#include "poko_diagnostics.h"
-#include "poko_event.h"
-#include "poko_job.h"
-#include "poko_log.h"
-#include "poko_math.h"
-#include "poko_ownership.h"
-#include "poko_settings.h"
-#include "poko_version.h"
+#include "poko/core/assert.h"
+#include "poko/core/build_config.h"
+#include "poko/core/clock.h"
+#include "poko/core/diagnostics.h"
+#include "poko/core/event.h"
+#include "poko/core/job.h"
+#include "poko/core/log.h"
+#include "poko/core/math.h"
+#include "poko/core/ownership.h"
+#include "poko/core/settings.h"
+#include "poko/core/version.h"
 
 // Console test application for engine core (systemplan/03). A headless demo
 // that runs without any graphics device and exercises the core subsystems.

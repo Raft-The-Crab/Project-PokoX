@@ -16,11 +16,11 @@
 
 #include <vulkan/vulkan.h>
 
-#include "poko_render_device.h"
-#include "poko_renderer.h"
-#include "poko_result.h"
-#include "poko_version.h"
-#include "poko_vulkan_device.h"
+#include "poko/renderer/render_device.h"
+#include "poko/renderer/renderer.h"
+#include "poko/core/result.h"
+#include "poko/core/version.h"
+#include "poko/renderer/vulkan_device.h"
 
 #ifndef POKO_IMPL_LABEL
 #define POKO_IMPL_LABEL "LOCAL_DEV"
