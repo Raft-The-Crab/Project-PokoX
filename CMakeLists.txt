@@ -52,6 +52,7 @@ add_subdirectory(engine/memory)
 add_subdirectory(engine/io)
 add_subdirectory(engine/postprocess)
 add_subdirectory(engine/network)
+add_subdirectory(engine/compression)
 
 # A headless Server build contains no renderer (systemplan/18).
 if(NOT POKO_SERVER_CONFIG)
