@@ -14,6 +14,10 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
 
 ### Added
 
+- `poko_replication`: PKXR delta-snapshot replication with interest management,
+  server-authoritative input validation and client interpolation over the
+  transport seam.
+
 - Initial repository foundation (Stage 0).
 - Proprietary `LICENSE` establishing closed-source terms.
 - `CONTRIBUTING.md` covering the system-first development philosophy,
