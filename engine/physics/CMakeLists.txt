@@ -37,4 +37,5 @@ poko_add_unit_tests(poko_physics_custom
         physics_custom_world_test.cpp
         physics_solver_test.cpp
         physics_joint_test.cpp
-        physics_ccd_test.cpp)
+        physics_ccd_test.cpp
+        physics_robustness_test.cpp)

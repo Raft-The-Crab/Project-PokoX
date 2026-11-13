@@ -89,6 +89,10 @@ public:
     // contact instead of tunnelling. Rotation is not swept.
     void set_ccd_enabled(bool enabled) noexcept;
     std::uint32_t ccd_hit_count() const noexcept; // cumulative
+
+    // Bodies whose state became non-finite and were restored to their last
+    // finite state (cumulative). Should stay 0; a non-zero value is a bug report.
+    std::uint32_t nonfinite_recoveries() const noexcept;
     bool is_sleeping(BodyHandle body) const noexcept;
     Status wake(BodyHandle body);
     std::uint32_t sleeping_body_count() const noexcept;
@@ -107,6 +111,7 @@ private:
         std::uint32_t collision_mask = 0xFFFFFFFFu;
         bool sleeping = false;
         float sleep_timer = 0.0f;
+        BodyState last_good{}; // most recent finite state, for recovery
     };
 
     struct Joint {
@@ -152,6 +157,7 @@ private:
     bool sleep_enabled_ = true;
     bool ccd_enabled_ = true;
     std::uint32_t ccd_hits_ = 0;
+    std::uint32_t nonfinite_recoveries_ = 0;
     float accumulator_ = 0.0f;
     std::uint32_t contacts_ = 0;
     std::uint32_t substeps_ = 0;

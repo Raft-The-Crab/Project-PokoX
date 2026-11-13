@@ -6,6 +6,22 @@
 namespace poko {
 
 namespace {
+bool finite3(const math::Vec3& v) noexcept {
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+bool finite_state(const BodyState& s) noexcept {
+    return finite3(s.position) && finite3(s.velocity) && finite3(s.angular_velocity) &&
+           std::isfinite(s.rotation.x) && std::isfinite(s.rotation.y) &&
+           std::isfinite(s.rotation.z) && std::isfinite(s.rotation.w);
+}
+
+// Unit-length rotation; a zero quaternion becomes the identity.
+BodyState sanitized(BodyState s) noexcept {
+    s.rotation = math::normalize(s.rotation);
+    return s;
+}
+
 
 // Diagonal of the inverse local inertia tensor for a solid shape of `mass`.
 math::Vec3 inverse_inertia(const ShapeDesc& shape, float mass) noexcept {
@@ -47,7 +63,9 @@ bool CustomPhysicsWorld::initialize(const PhysicsWorldDesc& desc) noexcept {
     if (initialized_) {
         return true;
     }
-    if (!std::isfinite(desc.fixed_delta_seconds) || desc.fixed_delta_seconds <= 0.0f) {
+    // 0.1 ms .. 100 ms: outside this the solver is meaningless or unstable.
+    if (!std::isfinite(desc.fixed_delta_seconds) || desc.fixed_delta_seconds < 1.0e-4f ||
+        desc.fixed_delta_seconds > 0.1f) {
         return false;
     }
     if (!std::isfinite(desc.gravity.x) || !std::isfinite(desc.gravity.y) ||
@@ -87,6 +105,10 @@ Result<BodyHandle> CustomPhysicsWorld::create_body(const BodyDesc& desc) {
     if (!valid(desc)) {
         return Result<BodyHandle>::fail(ErrorCode::InvalidArgument, "invalid body descriptor");
     }
+    const BodyState initial{desc.position, desc.rotation, desc.velocity, desc.angular_velocity};
+    if (!finite_state(initial) || !std::isfinite(desc.mass)) {
+        return Result<BodyHandle>::fail(ErrorCode::InvalidArgument, "non-finite body state");
+    }
     HandleIndex index;
     if (!free_.empty()) {
         index = free_.back();
@@ -101,7 +123,8 @@ Result<BodyHandle> CustomPhysicsWorld::create_body(const BodyDesc& desc) {
     body.alive = true;
     body.type = desc.type;
     body.shape = desc.shape;
-    body.state = BodyState{desc.position, desc.rotation, desc.velocity, desc.angular_velocity};
+    body.state = sanitized(initial);
+    body.last_good = body.state;
     body.mass = desc.type == BodyType::Static ? 0.0f : desc.mass;
     body.inv_inertia = desc.type == BodyType::Dynamic ? inverse_inertia(desc.shape, desc.mass) : math::Vec3{};
     body.friction = desc.friction;
@@ -131,6 +154,15 @@ Status CustomPhysicsWorld::destroy_body(BodyHandle body) {
         ++joint_generations_[i];
         joint_free_.push_back(static_cast<HandleIndex>(i));
     }
+    // Warm-start entries naming this slot would otherwise match its next occupant.
+    const auto slot = static_cast<std::uint64_t>(body.index) + 1;
+    for (auto it = contact_cache_.begin(); it != contact_cache_.end();) {
+        if ((it->first >> 32) == slot || (it->first & 0xFFFFFFFFull) == slot) {
+            it = contact_cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
     bodies_[body.index].alive = false;
     ++generations_[body.index];
     free_.push_back(body.index);
@@ -145,7 +177,11 @@ Status CustomPhysicsWorld::set_body_state(BodyHandle body, const BodyState& stat
     if (!handle_live(body)) {
         return Status::fail(ErrorCode::NotFound, "body handle is not live");
     }
-    bodies_[body.index].state = state;
+    if (!finite_state(state)) {
+        return Status::fail(ErrorCode::InvalidArgument, "non-finite body state");
+    }
+    bodies_[body.index].state = sanitized(state);
+    bodies_[body.index].last_good = bodies_[body.index].state;
     bodies_[body.index].sleeping = false;
     bodies_[body.index].sleep_timer = 0.0f;
     return Status::success();
@@ -206,6 +242,11 @@ void CustomPhysicsWorld::set_sleep_enabled(bool enabled) noexcept {
 void CustomPhysicsWorld::set_ccd_enabled(bool enabled) noexcept {
     std::lock_guard<std::mutex> guard(mutex_);
     ccd_enabled_ = enabled;
+}
+
+std::uint32_t CustomPhysicsWorld::nonfinite_recoveries() const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return nonfinite_recoveries_;
 }
 
 std::uint32_t CustomPhysicsWorld::ccd_hit_count() const noexcept {

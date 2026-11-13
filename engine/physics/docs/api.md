@@ -47,6 +47,14 @@ restitution included. Only fast bodies are tested, each after a cheap swept-AABB
 reject. `ccd_hit_count()` reports activations. The ground plane needs no CCD
 because it is a half-space.
 
+Robustness: non-finite or zero-quaternion input is rejected or sanitized, the
+fixed step must lie in 0.1-100 ms, linear and angular speed are capped (1000 m/s,
+300 rad/s), per-body push-out is capped at 0.2 m per step so deep overlaps
+resolve over several steps, work beyond the 8-substep cap is dropped instead of
+accumulating, moving kinematic bodies wake sleeping bodies they touch, and a
+body that still goes non-finite is restored to its last finite state
+(`nonfinite_recoveries()` counts these and should stay 0).
+
 Rest damping removes residual sway from slow touching bodies, so tall stacks
 settle and sleep. Joints are created with `create_joint` (world-space anchor and
 axis), driven with `set_joint_motor`, read with `joint_position`; jointed bodies

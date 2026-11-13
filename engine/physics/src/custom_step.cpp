@@ -29,6 +29,9 @@ constexpr float kRestDamping = 4.0f;
 constexpr float kRestDampSpeed = 0.5f;
 constexpr float kCcdPenetration = 0.002f;
 constexpr float kCcdTolerance = 0.001f;
+constexpr float kMaxLinearSpeed = 1000.0f;  // m/s
+constexpr float kMaxAngularSpeed = 300.0f;  // rad/s
+constexpr float kMaxCorrection = 0.2f;      // metres of push-out per contact per step
 
 struct Constraint {
     int a = -1;
@@ -111,6 +114,11 @@ void CustomPhysicsWorld::substep(float h) {
     const auto awake_dynamic = [&](const Body& b) {
         return b.type == BodyType::Dynamic && !b.sleeping;
     };
+    const auto kinematic_moving = [](const Body& b) {
+        return b.type == BodyType::Kinematic &&
+               (math::length_squared(b.state.velocity) > 1.0e-6f ||
+                math::length_squared(b.state.angular_velocity) > 1.0e-6f);
+    };
     std::vector<std::uint64_t> joined; // body pairs that must not collide
     for (const Joint& joint : joints_) {
         if (joint.alive && !joint.collide_connected && joint.b >= 0) {
@@ -134,7 +142,10 @@ void CustomPhysicsWorld::substep(float h) {
             }
             const Body& ba = bodies_[static_cast<std::size_t>(lo)];
             const Body& bb = bodies_[static_cast<std::size_t>(hi)];
-            if (!awake_dynamic(ba) && !awake_dynamic(bb)) continue;
+            // A moving kinematic body must still reach a sleeping dynamic one to wake it.
+            const bool wakes = (ba.sleeping && ba.type == BodyType::Dynamic && kinematic_moving(bb)) ||
+                               (bb.sleeping && bb.type == BodyType::Dynamic && kinematic_moving(ba));
+            if (!awake_dynamic(ba) && !awake_dynamic(bb) && !wakes) continue;
             if ((ba.collision_layer & bb.collision_mask) == 0 ||
                 (bb.collision_layer & ba.collision_mask) == 0) {
                 continue;
@@ -259,6 +270,13 @@ void CustomPhysicsWorld::substep(float h) {
             if (c.b >= 0) shift[static_cast<std::size_t>(c.b)] = shift[static_cast<std::size_t>(c.b)] + c.n * (corr * ib);
         }
     }
+    // Bound the total push-out per body per step so deep overlaps resolve over
+    // several steps instead of teleporting.
+    for (Vec3& moved : shift) {
+        const float length = math::length(moved);
+        if (length > kMaxCorrection) moved = moved * (kMaxCorrection / length);
+    }
+
 
     // 6. Velocity solve (sequential impulses).
     const auto velocity_at = [&](int i, const Vec3& r) {
@@ -412,6 +430,19 @@ void CustomPhysicsWorld::substep(float h) {
         contact_cache_[c.key].push_back({c.point, c.jn, c.t1 * c.jt1 + c.t2 * c.jt2});
     }
 
+    // Speed limits keep one bad impulse or user input from flinging a body
+    // through the world (and from making CCD sweeps unbounded).
+    for (std::size_t i = 0; i < count; ++i) {
+        Body& body = bodies_[i];
+        if (!body.alive || !awake_dynamic(body)) continue;
+        const float lin = math::length(body.state.velocity);
+        if (lin > kMaxLinearSpeed) body.state.velocity = body.state.velocity * (kMaxLinearSpeed / lin);
+        const float ang = math::length(body.state.angular_velocity);
+        if (ang > kMaxAngularSpeed) {
+            body.state.angular_velocity = body.state.angular_velocity * (kMaxAngularSpeed / ang);
+        }
+    }
+
     // 6b. Continuous collision detection. Bodies whose surfaces move far
     // relative to their thickness are advanced to the exact time of impact
     // (GJK distance + conservative advancement, rotation included) against each
@@ -539,6 +570,26 @@ void CustomPhysicsWorld::substep(float h) {
             }
         }
     }
+    // Last line of defence: a body whose state went non-finite is restored to
+    // its last finite state at rest instead of poisoning the whole world.
+    for (std::size_t i = 0; i < count; ++i) {
+        Body& body = bodies_[i];
+        if (!body.alive || !awake_dynamic(body)) continue;
+        const BodyState& s = body.state;
+        const bool finite = std::isfinite(s.position.x + s.position.y + s.position.z +
+                                          s.velocity.x + s.velocity.y + s.velocity.z +
+                                          s.angular_velocity.x + s.angular_velocity.y +
+                                          s.angular_velocity.z + s.rotation.x + s.rotation.y +
+                                          s.rotation.z + s.rotation.w);
+        if (finite) {
+            body.last_good = s;
+        } else {
+            body.state = body.last_good;
+            body.state.velocity = Vec3{};
+            body.state.angular_velocity = Vec3{};
+            ++nonfinite_recoveries_;
+        }
+    }
     ++substeps_;
 }
 
@@ -556,6 +607,9 @@ void CustomPhysicsWorld::step(float delta_seconds) {
         accumulator_ -= h;
         ++iterations;
     }
+    // Past the substep cap the simulation runs slower than real time. Drop the
+    // owed whole steps instead of letting the backlog grow without bound.
+    if (accumulator_ >= h) accumulator_ = std::fmod(accumulator_, h);
 }
 
 } // namespace poko

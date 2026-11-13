@@ -100,11 +100,16 @@ POKO_TEST(collision_response_separates_overlapping_bodies) {
     auto moving = world.create_body(make_sphere(0.6f, 0.0f, 0.0f)); // overlapping
     POKO_CHECK(moving.ok());
     world.step(1.0f / 60.0f);
-
+    POKO_CHECK(world.contact_count() > 0u);
+    // Push-out is bounded per step (no teleporting): it moves apart at once...
+    const auto first = world.get_body_state(moving.value());
+    POKO_CHECK(first.ok());
+    POKO_CHECK(first.value().position.x > 0.65f);
+    // ...and is fully clear of the static body within a few steps.
+    for (int i = 0; i < 6; ++i) world.step(1.0f / 60.0f);
     const auto state = world.get_body_state(moving.value());
     POKO_CHECK(state.ok());
-    POKO_CHECK(state.value().position.x > 0.9f); // pushed out of penetration
-    POKO_CHECK(world.contact_count() > 0u);
+    POKO_CHECK(state.value().position.x > 0.95f);
 }
 
 POKO_TEST(raycast_hits_analytic_shapes_and_respects_layer_mask) {
