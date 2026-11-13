@@ -203,6 +203,16 @@ void CustomPhysicsWorld::set_sleep_enabled(bool enabled) noexcept {
     }
 }
 
+void CustomPhysicsWorld::set_ccd_enabled(bool enabled) noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    ccd_enabled_ = enabled;
+}
+
+std::uint32_t CustomPhysicsWorld::ccd_hit_count() const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return ccd_hits_;
+}
+
 bool CustomPhysicsWorld::is_sleeping(BodyHandle body) const noexcept {
     std::lock_guard<std::mutex> guard(mutex_);
     return handle_live(body) && bodies_[body.index].sleeping;

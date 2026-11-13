@@ -26,6 +26,7 @@ constexpr float kSleepTime = 0.5f;
 constexpr float kMatchDistance = 0.05f;
 constexpr float kRestDamping = 4.0f;
 constexpr float kRestDampSpeed = 0.5f;
+constexpr float kCcdPenetration = 0.002f;
 
 struct Constraint {
     int a = -1;
@@ -58,6 +59,26 @@ Vec3 perpendicular(const Vec3& n) noexcept {
     return math::normalize(math::cross(n, helper));
 }
 
+
+// Radius of the largest sphere that fits inside the shape: the thickness the
+// swept centre must stay clear of.
+float inner_radius(const ShapeDesc& shape) noexcept {
+    switch (shape.kind) {
+    case ShapeKind::Sphere:
+    case ShapeKind::Capsule:
+        return shape.radius;
+    case ShapeKind::Box:
+        return std::min({shape.half_extents.x, shape.half_extents.y, shape.half_extents.z});
+    }
+    return shape.radius;
+}
+
+// Target shape grown by `r`; a ray against it approximates a sphere cast.
+ShapeDesc inflate(ShapeDesc shape, float r) noexcept {
+    shape.radius += r;
+    shape.half_extents = {shape.half_extents.x + r, shape.half_extents.y + r, shape.half_extents.z + r};
+    return shape;
+}
 } // namespace
 
 void CustomPhysicsWorld::substep(float h) {
@@ -393,6 +414,46 @@ void CustomPhysicsWorld::substep(float h) {
     contact_cache_.clear();
     for (const Constraint& c : constraints) {
         contact_cache_[c.key].push_back({c.point, c.jn, c.t1 * c.jt1 + c.t2 * c.jt2});
+    }
+
+    // 6b. Continuous collision detection. Sweep each fast body's centre along
+    // its relative motion against every other body inflated by the mover's inner
+    // radius; stop just inside first contact and let the solver resolve it.
+    if (ccd_enabled_) {
+        for (std::size_t i = 0; i < count; ++i) {
+            const Body& body = bodies_[i];
+            if (!body.alive || !awake_dynamic(body)) continue;
+            const float inner = inner_radius(body.shape);
+            const Vec3 vi = body.state.velocity;
+            float best = 1.0f;
+            for (std::size_t j = 0; j < count; ++j) {
+                if (j == i || !bodies_[j].alive) continue;
+                const Body& other = bodies_[j];
+                if ((body.collision_layer & other.collision_mask) == 0 ||
+                    (other.collision_layer & body.collision_mask) == 0) {
+                    continue;
+                }
+                const auto lo = static_cast<std::uint64_t>(std::min(i, j));
+                const auto hi = static_cast<std::uint64_t>(std::max(i, j));
+                if (std::binary_search(joined.begin(), joined.end(), lo << 32 | hi)) continue;
+                const bool other_moves = other.type == BodyType::Kinematic || awake_dynamic(other);
+                const Vec3 relative = vi - (other_moves ? other.state.velocity : Vec3{});
+                const float travel = math::length(relative) * h;
+                if (travel < 0.5f * inner) continue;
+                float t = 0.0f;
+                Vec3 normal{};
+                if (!ray_shape(body.state.position, relative / (travel / h), inflate(other.shape, inner),
+                               Pose{other.state.position, other.state.rotation}, travel, t, normal) ||
+                    t < 1.0e-4f) {
+                    continue; // miss, or already overlapping: the contact solver owns that
+                }
+                best = std::min(best, std::min(1.0f, (t + kCcdPenetration) / travel));
+            }
+            if (best < 1.0f) {
+                shift[i] = shift[i] - vi * (h * (1.0f - best));
+                ++ccd_hits_;
+            }
+        }
     }
 
     // 7. Integrate positions and orientation.

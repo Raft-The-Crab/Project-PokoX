@@ -83,6 +83,12 @@ public:
     // Sleeping: an island of dynamic bodies at rest for `sleep_time` seconds
     // stops simulating until touched by a moving body or modified.
     void set_sleep_enabled(bool enabled) noexcept;
+
+    // Continuous collision detection: a body moving more than half its inner
+    // radius per step is swept against other bodies so it stops at first
+    // contact instead of tunnelling. Rotation is not swept.
+    void set_ccd_enabled(bool enabled) noexcept;
+    std::uint32_t ccd_hit_count() const noexcept; // cumulative
     bool is_sleeping(BodyHandle body) const noexcept;
     Status wake(BodyHandle body);
     std::uint32_t sleeping_body_count() const noexcept;
@@ -144,6 +150,8 @@ private:
     bool ground_enabled_ = true;
     float ground_height_ = 0.0f;
     bool sleep_enabled_ = true;
+    bool ccd_enabled_ = true;
+    std::uint32_t ccd_hits_ = 0;
     float accumulator_ = 0.0f;
     std::uint32_t contacts_ = 0;
     std::uint32_t substeps_ = 0;

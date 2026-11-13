@@ -35,14 +35,21 @@ substep (at most 8 per `step`):
 
 Raycasts are exact against oriented spheres, boxes and capsules.
 
+Continuous collision detection (on by default, `set_ccd_enabled`) sweeps any body
+moving more than half its inner radius per step against every other body
+(targets inflated by the mover's inner radius) and stops it just inside first
+contact, so the regular solver resolves the hit, restitution included. Rotation
+is not swept, and ground-plane tunnelling cannot occur because it is a half-space.
+`ccd_hit_count()` reports activations.
+
 Rest damping removes residual sway from slow touching bodies, so tall stacks
 settle and sleep. Joints are created with `create_joint` (world-space anchor and
 axis), driven with `set_joint_motor`, read with `joint_position`; jointed bodies
 do not collide unless `collide_connected`, share one sleep island and are
 destroyed with their bodies.
 
-**Not yet done:** continuous collision detection for fast
-small bodies, convex-hull and triangle-mesh shapes, triggers and events, shape
+**Not yet done:** 
+convex-hull and triangle-mesh shapes, triggers and events, shape
 casts, spring and cone joints.
 
 Public headers live under `include/poko/physics/`; sources under `src/`;
