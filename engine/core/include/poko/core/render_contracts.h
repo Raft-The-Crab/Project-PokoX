@@ -21,6 +21,7 @@ enum class GraphicsBackend : std::uint8_t {
     Vulkan,
     OpenGL,
     Null, // MOCK / headless
+    Software, // PRODUCTION CPU rasterizer
 };
 
 inline constexpr const char* to_string(GraphicsBackend backend) noexcept {
@@ -29,6 +30,8 @@ inline constexpr const char* to_string(GraphicsBackend backend) noexcept {
         return "vulkan";
     case GraphicsBackend::OpenGL:
         return "opengl";
+    case GraphicsBackend::Software:
+        return "software";
     case GraphicsBackend::Null:
         return "null";
     case GraphicsBackend::Unknown:

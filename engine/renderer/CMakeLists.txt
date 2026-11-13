@@ -83,12 +83,24 @@ if(POKO_RENDER_VULKAN)
     poko_set_impl_label(poko_render_vulkan PRODUCTION)
 endif()
 
+# PRODUCTION CPU rasterizer behind the render device seam: real pixels with no
+# GPU, window or driver. Standard library only.
+add_library(poko_render_software STATIC
+    src/sw_device.cpp
+    src/sw_raster.cpp)
+target_include_directories(poko_render_software PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(poko_render_software PUBLIC poko_core)
+poko_apply_common(poko_render_software)
+poko_set_impl_label(poko_render_software PRODUCTION)
+
 poko_add_unit_tests(poko_renderer
     TEST_SOURCES
+        renderer_software_test.cpp
         renderer_contracts_test.cpp
         renderer_null_device_test.cpp
         renderer_shader_cache_test.cpp
         renderer_camera_test.cpp
         renderer_submission_test.cpp
         renderer_frame_stats_facade_test.cpp
-    LINK_LIBS poko_render_null)
+    LINK_LIBS poko_render_null poko_render_software)

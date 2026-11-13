@@ -89,6 +89,17 @@ if(NOT POKO_SERVER_CONFIG)
     poko_set_impl_label(poko_engine_demo LOCAL_DEV)
     add_test(NAME runtime.engine COMMAND poko_engine_demo)
 
+    # Software-rendered physics showcase; writes PPM snapshots to the cwd.
+    add_executable(poko_physics_showcase src/physics_showcase_main.cpp)
+    target_link_libraries(poko_physics_showcase PRIVATE
+        poko_graphics
+        poko_renderer
+        poko_render_software
+        poko_physics_custom)
+    poko_apply_common(poko_physics_showcase)
+    poko_set_impl_label(poko_physics_showcase LOCAL_DEV)
+    add_test(NAME runtime.physics_showcase COMMAND poko_physics_showcase ${CMAKE_CURRENT_BINARY_DIR})
+
     # Original MOCK-backed integration harness, kept as a regression check
     # that the seams still work with the deterministic fakes.
     add_executable(poko_game_demo src/game_main.cpp)
