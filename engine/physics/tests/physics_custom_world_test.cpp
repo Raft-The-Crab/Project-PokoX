@@ -337,4 +337,278 @@ POKO_TEST(raycast_respects_rotation_and_capsule_shape) {
     POKO_CHECK(!capsule_world.raycast(ray, 20.0f, 0xFFFFFFFFu, hit));
 }
 
+POKO_TEST(tall_stack_settles_precisely_and_sleeps) {
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(PhysicsWorldDesc{}));
+    std::vector<poko::BodyHandle> boxes;
+    for (int i = 0; i < 5; ++i) {
+        boxes.push_back(
+            world.create_body(make_box(0.0f, 0.5f + 1.05f * static_cast<float>(i), 0.0f)).value());
+    }
+    run(world, 420);
+    for (int i = 0; i < 5; ++i) {
+        const auto s = world.get_body_state(boxes[static_cast<std::size_t>(i)]).value();
+        POKO_CHECK(std::abs(s.position.y - (0.5f + static_cast<float>(i))) < 0.04f);
+        POKO_CHECK(std::abs(s.position.x) < 0.05f && std::abs(s.position.z) < 0.05f);
+        POKO_CHECK(world.is_sleeping(boxes[static_cast<std::size_t>(i)]));
+    }
+}
+
+POKO_TEST(fast_bodies_do_not_tunnel) {
+    PhysicsWorldDesc desc;
+    desc.gravity = {0.0f, 0.0f, 0.0f};
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(desc));
+    world.set_ground(false);
+    BodyDesc wall = make_box(5.0f, 0.0f, 0.0f);
+    wall.type = BodyType::Static;
+    wall.shape.half_extents = {0.05f, 5.0f, 5.0f};
+    POKO_CHECK(world.create_body(wall).ok());
+    BodyDesc bullet = make_sphere(0.0f, 0.0f, 0.0f, 0.25f);
+    bullet.velocity = {300.0f, 0.0f, 0.0f}; // 5 m per step, wall is 0.1 m thick
+    auto handle = world.create_body(bullet);
+    POKO_CHECK(handle.ok());
+    run(world, 30);
+    const auto s = world.get_body_state(handle.value()).value();
+    POKO_CHECK(std::isfinite(s.position.x));
+    POKO_CHECK(s.position.x < 5.0f); // stayed on the near side
+
+    CustomPhysicsWorld falling;
+    POKO_CHECK(falling.initialize(PhysicsWorldDesc{}));
+    BodyDesc dropped = make_sphere(0.0f, 50.0f, 0.0f, 0.25f);
+    dropped.velocity = {0.0f, -150.0f, 0.0f};
+    auto drop = falling.create_body(dropped);
+    run(falling, 30);
+    POKO_CHECK(falling.get_body_state(drop.value()).value().position.y > 0.2f);
+}
+
+POKO_TEST(broadphase_finds_pairs_regardless_of_creation_order) {
+    PhysicsWorldDesc desc;
+    desc.gravity = {0.0f, 0.0f, 0.0f};
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(desc));
+    world.set_ground(false);
+    BodyDesc anchor = make_sphere(0.0f, 0.0f, 0.0f);
+    anchor.type = BodyType::Static;
+    POKO_CHECK(world.create_body(anchor).ok());
+    POKO_CHECK(world.create_body(make_sphere(10.0f, 0.0f, 0.0f)).ok()); // far away, created between
+    auto near = world.create_body(make_sphere(0.5f, 0.0f, 0.0f));       // overlaps the first body
+    POKO_CHECK(near.ok());
+    run(world, 3);
+    POKO_CHECK(world.get_body_state(near.value()).value().position.x > 0.9f);
+}
+
+POKO_TEST(ball_joint_to_world_keeps_pendulum_length) {
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(PhysicsWorldDesc{}));
+    world.set_ground(false);
+    auto bob = world.create_body(make_sphere(2.0f, 5.0f, 0.0f, 0.25f));
+    POKO_CHECK(bob.ok());
+    poko::JointDesc joint;
+    joint.kind = poko::JointKind::Ball;
+    joint.body_a = bob.value();
+    joint.anchor_a = {-2.0f, 0.0f, 0.0f};
+    joint.anchor_b = {0.0f, 5.0f, 0.0f}; // world pivot
+    auto handle = world.create_joint(joint);
+    POKO_CHECK(handle.ok());
+    POKO_CHECK_EQ(world.joint_count(), 1u);
+    for (int i = 0; i < 240; ++i) {
+        world.step(1.0f / 60.0f);
+        const auto p = world.get_body_state(bob.value()).value().position;
+        const float radius = std::sqrt(p.x * p.x + (p.y - 5.0f) * (p.y - 5.0f) + p.z * p.z);
+        POKO_CHECK(std::abs(radius - 2.0f) < 0.08f);
+    }
+    // It really swung: gravity must have pulled it well below the pivot height.
+    POKO_CHECK(world.get_body_state(bob.value()).value().position.y < 4.0f);
+    POKO_CHECK(!world.is_sleeping(bob.value())); // jointed bodies never sleep
+    POKO_CHECK(world.destroy_joint(handle.value()).ok());
+    POKO_CHECK_EQ(world.joint_count(), 0u);
+}
+
+POKO_TEST(distance_joint_holds_a_rod_between_two_bodies) {
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(PhysicsWorldDesc{}));
+    world.set_ground(false);
+    BodyDesc top = make_sphere(0.0f, 10.0f, 0.0f, 0.2f);
+    top.type = BodyType::Kinematic;
+    auto a = world.create_body(top);
+    auto b = world.create_body(make_sphere(1.5f, 10.0f, 0.0f, 0.2f));
+    POKO_CHECK(a.ok() && b.ok());
+    poko::JointDesc joint;
+    joint.kind = poko::JointKind::Distance;
+    joint.body_a = a.value();
+    joint.body_b = b.value();
+    joint.distance = 1.5f;
+    POKO_CHECK(world.create_joint(joint).ok());
+    run(world, 200);
+    const auto pa = world.get_body_state(a.value()).value().position;
+    const auto pb = world.get_body_state(b.value()).value().position;
+    const float dx = pb.x - pa.x;
+    const float dy = pb.y - pa.y;
+    POKO_CHECK(std::abs(std::sqrt(dx * dx + dy * dy) - 1.5f) < 0.06f);
+}
+
+POKO_TEST(hinge_joint_only_rotates_about_its_axis) {
+    PhysicsWorldDesc desc;
+    desc.gravity = {0.0f, 0.0f, 0.0f};
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(desc));
+    world.set_ground(false);
+    BodyDesc door = make_box(1.0f, 0.0f, 0.0f);
+    door.shape.half_extents = {1.0f, 1.0f, 0.1f};
+    door.angular_velocity = {2.0f, 3.0f, 0.0f}; // only the Y part is allowed
+    door.velocity = {0.0f, 0.0f, -3.0f};        // consistent with spinning about the pin
+    auto handle = world.create_body(door);
+    POKO_CHECK(handle.ok());
+    poko::JointDesc joint;
+    joint.kind = poko::JointKind::Hinge;
+    joint.body_a = handle.value();
+    joint.anchor_a = {-1.0f, 0.0f, 0.0f};
+    joint.anchor_b = {0.0f, 0.0f, 0.0f};
+    joint.axis_a = {0.0f, 1.0f, 0.0f};
+    joint.axis_b = {0.0f, 1.0f, 0.0f};
+    POKO_CHECK(world.create_joint(joint).ok());
+    run(world, 120);
+    const auto s = world.get_body_state(handle.value()).value();
+    POKO_CHECK(std::abs(s.angular_velocity.x) < 0.2f);
+    POKO_CHECK(std::abs(s.angular_velocity.z) < 0.2f);
+    POKO_CHECK(s.angular_velocity.y > 2.5f);
+    // The hinge pin stays at the world origin.
+    const auto pin = s.position + poko::math::rotate(s.rotation, {-1.0f, 0.0f, 0.0f});
+    POKO_CHECK(poko::math::length(pin) < 0.1f);
+}
+
+POKO_TEST(fixed_joint_holds_two_bodies_rigid_while_they_fall) {
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(PhysicsWorldDesc{}));
+    auto a = world.create_body(make_box(0.0f, 3.0f, 0.0f));
+    auto b = world.create_body(make_box(1.2f, 3.0f, 0.0f));
+    POKO_CHECK(a.ok() && b.ok());
+    poko::JointDesc joint;
+    joint.kind = poko::JointKind::Fixed;
+    joint.body_a = a.value();
+    joint.body_b = b.value();
+    joint.anchor_a = {0.6f, 0.0f, 0.0f};
+    joint.anchor_b = {-0.6f, 0.0f, 0.0f};
+    POKO_CHECK(world.create_joint(joint).ok());
+    run(world, 240);
+    const auto pa = world.get_body_state(a.value()).value();
+    const auto pb = world.get_body_state(b.value()).value();
+    POKO_CHECK(poko::math::distance(pa.position, pb.position) > 1.1f);
+    POKO_CHECK(poko::math::distance(pa.position, pb.position) < 1.3f);
+    POKO_CHECK(std::abs(pa.position.y - pb.position.y) < 0.1f); // did not droop
+}
+
+POKO_TEST(joints_are_removed_with_their_bodies_and_validated) {
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(PhysicsWorldDesc{}));
+    auto a = world.create_body(make_sphere(0.0f, 5.0f, 0.0f));
+    auto b = world.create_body(make_sphere(1.0f, 5.0f, 0.0f));
+    BodyDesc fixed = make_sphere(5.0f, 5.0f, 0.0f);
+    fixed.type = BodyType::Static;
+    auto c = world.create_body(fixed);
+    POKO_CHECK(a.ok() && b.ok() && c.ok());
+
+    poko::JointDesc joint;
+    joint.body_a = a.value();
+    joint.body_b = a.value(); // same body twice
+    POKO_CHECK(!world.create_joint(joint).ok());
+    joint.body_b = c.value();
+    joint.body_a = c.value(); // no dynamic body
+    POKO_CHECK(!world.create_joint(joint).ok());
+    joint.body_a = a.value();
+    joint.body_b = b.value();
+    POKO_CHECK(world.create_joint(joint).ok());
+    POKO_CHECK_EQ(world.joint_count(), 1u);
+    POKO_CHECK(world.destroy_body(b.value()).ok());
+    POKO_CHECK_EQ(world.joint_count(), 0u);
+}
+
+POKO_TEST(triggers_report_enter_and_leave_without_colliding) {
+    PhysicsWorldDesc desc;
+    desc.gravity = {0.0f, 0.0f, 0.0f};
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(desc));
+    world.set_ground(false);
+    BodyDesc zone = make_box(0.0f, 0.0f, 0.0f);
+    zone.type = BodyType::Static;
+    zone.is_trigger = true;
+    zone.shape.half_extents = {1.0f, 1.0f, 1.0f};
+    auto trigger = world.create_body(zone);
+    BodyDesc runner = make_sphere(-4.0f, 0.0f, 0.0f);
+    runner.velocity = {4.0f, 0.0f, 0.0f};
+    auto body = world.create_body(runner);
+    POKO_CHECK(trigger.ok() && body.ok());
+
+    std::vector<poko::TriggerEvent> events;
+    for (int i = 0; i < 180; ++i) {
+        world.step(1.0f / 60.0f);
+        world.drain_trigger_events(events);
+    }
+    POKO_CHECK_EQ(events.size(), 2u);
+    POKO_CHECK(events[0].entered && !events[1].entered);
+    POKO_CHECK(poko::same_handle(events[0].trigger, trigger.value()));
+    POKO_CHECK(poko::same_handle(events[0].other, body.value()));
+    // Passing through never slowed the body: no collision response.
+    POKO_CHECK(std::abs(world.get_body_state(body.value()).value().velocity.x - 4.0f) < 1e-4f);
+
+    // Triggers are invisible to raycasts and cannot be dynamic.
+    Ray ray;
+    ray.origin = {0.0f, 5.0f, 0.0f};
+    ray.direction = {0.0f, -1.0f, 0.0f};
+    RayHit hit;
+    POKO_CHECK(!world.raycast(ray, 20.0f, 0xFFFFFFFFu, hit));
+    BodyDesc bad = zone;
+    bad.type = BodyType::Dynamic;
+    POKO_CHECK(!world.create_body(bad).ok());
+}
+
+POKO_TEST(shape_cast_and_overlap_queries) {
+    CustomPhysicsWorld world;
+    POKO_CHECK(world.initialize(PhysicsWorldDesc{}));
+    BodyDesc crate = make_box(0.0f, 0.5f, 0.0f);
+    crate.type = BodyType::Static;
+    crate.shape.half_extents = {1.0f, 0.5f, 1.0f};
+    auto crate_handle = world.create_body(crate);
+    POKO_CHECK(crate_handle.ok());
+
+    poko::ShapeDesc ball;
+    ball.kind = ShapeKind::Sphere;
+    ball.radius = 0.5f;
+    poko::SweepHit hit;
+    POKO_CHECK(world.shape_cast(ball, {0.0f, 5.0f, 0.0f}, {}, {0.0f, -1.0f, 0.0f}, 10.0f,
+                                0xFFFFFFFFu, hit));
+    POKO_CHECK(!hit.ground);
+    POKO_CHECK(std::abs(hit.distance - 3.5f) < 0.01f); // crate top at y = 1
+    POKO_CHECK(std::abs(hit.normal.y - 1.0f) < 0.01f);
+    POKO_CHECK(poko::same_handle(hit.body, crate_handle.value()));
+
+    // Beside the crate the cast reaches the ground plane instead.
+    POKO_CHECK(world.shape_cast(ball, {5.0f, 5.0f, 0.0f}, {}, {0.0f, -1.0f, 0.0f}, 10.0f,
+                                0xFFFFFFFFu, hit));
+    POKO_CHECK(hit.ground);
+    POKO_CHECK(std::abs(hit.distance - 4.5f) < 0.01f);
+
+    // Out of range, and a sideways cast that misses everything.
+    POKO_CHECK(!world.shape_cast(ball, {0.0f, 5.0f, 0.0f}, {}, {0.0f, -1.0f, 0.0f}, 2.0f,
+                                 0xFFFFFFFFu, hit));
+    POKO_CHECK(!world.shape_cast(ball, {5.0f, 3.0f, 0.0f}, {}, {1.0f, 0.0f, 0.0f}, 20.0f,
+                                 0xFFFFFFFFu, hit));
+
+    // A sideways capsule cast into the crate's side face.
+    poko::ShapeDesc capsule;
+    capsule.kind = ShapeKind::Capsule;
+    capsule.radius = 0.25f;
+    capsule.half_height = 0.5f;
+    POKO_CHECK(world.shape_cast(capsule, {-6.0f, 1.0f, 0.0f}, {}, {1.0f, 0.0f, 0.0f}, 10.0f,
+                                0xFFFFFFFFu, hit));
+    POKO_CHECK(std::abs(hit.distance - 4.75f) < 0.02f);
+    POKO_CHECK(hit.normal.x < -0.9f);
+
+    poko::BodyHandle found[4];
+    POKO_CHECK_EQ(world.overlap(ball, {0.5f, 1.0f, 0.0f}, {}, 0xFFFFFFFFu, found, 4), 1u);
+    POKO_CHECK(poko::same_handle(found[0], crate_handle.value()));
+    POKO_CHECK_EQ(world.overlap(ball, {6.0f, 3.0f, 0.0f}, {}, 0xFFFFFFFFu, found, 4), 0u);
+}
+
 POKO_TEST_MAIN()

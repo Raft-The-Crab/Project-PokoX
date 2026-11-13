@@ -343,18 +343,117 @@ Aabb bounds(const Collider& c) noexcept {
     return {c.position - extent, c.position + extent};
 }
 
-int collide(const Collider& a, const Collider& b, Contact* out) noexcept {
-    if (a.is_box && b.is_box) {
-        return box_box(a, b, out);
+namespace {
+
+Collider inflated(const Collider& c, float margin) noexcept {
+    Collider out = c;
+    const float grow = margin * 0.5f;
+    if (c.is_box) {
+        out.half = {c.half.x + grow, c.half.y + grow, c.half.z + grow};
+    } else {
+        out.radius += grow;
     }
-    if (!a.is_box && !b.is_box) {
-        return capsule_capsule(a, b, out);
-    }
-    return a.is_box ? capsule_box(b, a, false, out) : capsule_box(a, b, true, out);
+    return out;
 }
 
-int collide_plane(const Collider& c, float height, Contact* out) noexcept {
+// Gap along the best separating axis of two boxes (<= 0 when overlapping).
+float box_box_gap(const Collider& a, const Collider& b) noexcept {
+    Vec3 axes_a[3];
+    Vec3 axes_b[3];
+    for (int i = 0; i < 3; ++i) {
+        axes_a[i] = local_axis(a, i);
+        axes_b[i] = local_axis(b, i);
+    }
+    const float ha[3] = {a.half.x, a.half.y, a.half.z};
+    const float hb[3] = {b.half.x, b.half.y, b.half.z};
+    const Vec3 d = b.position - a.position;
+    float gap = -1.0e30f;
+    auto test = [&](Vec3 axis) {
+        const float len = math::length(axis);
+        if (len < 1.0e-4f) {
+            return;
+        }
+        axis = axis / len;
+        float ra = 0.0f;
+        float rb = 0.0f;
+        for (int k = 0; k < 3; ++k) {
+            ra += ha[k] * std::abs(math::dot(axes_a[k], axis));
+            rb += hb[k] * std::abs(math::dot(axes_b[k], axis));
+        }
+        gap = std::max(gap, std::abs(math::dot(d, axis)) - ra - rb);
+    };
+    for (int i = 0; i < 3; ++i) {
+        test(axes_a[i]);
+        test(axes_b[i]);
+        for (int j = 0; j < 3; ++j) {
+            test(math::cross(axes_a[i], axes_b[j]));
+        }
+    }
+    return gap;
+}
+
+float capsule_box_gap(const Collider& capsule, const Collider& box) noexcept {
+    const Segment seg = segment_of(capsule);
+    float lo = 0.0f;
+    float hi = 1.0f;
+    for (int i = 0; i < 24; ++i) {
+        const float m1 = lo + (hi - lo) / 3.0f;
+        const float m2 = hi - (hi - lo) / 3.0f;
+        if (box_distance(math::lerp(seg.p0, seg.p1, m1), box) <
+            box_distance(math::lerp(seg.p0, seg.p1, m2), box)) {
+            hi = m2;
+        } else {
+            lo = m1;
+        }
+    }
+    return box_distance(math::lerp(seg.p0, seg.p1, 0.5f * (lo + hi)), box) - capsule.radius;
+}
+
+} // namespace
+
+int collide(const Collider& a, const Collider& b, Contact* out, float margin) noexcept {
+    const Collider ia = margin > 0.0f ? inflated(a, margin) : a;
+    const Collider ib = margin > 0.0f ? inflated(b, margin) : b;
+    if (ia.is_box && ib.is_box) {
+        return box_box(ia, ib, out);
+    }
+    if (!ia.is_box && !ib.is_box) {
+        return capsule_capsule(ia, ib, out);
+    }
+    return ia.is_box ? capsule_box(ib, ia, false, out) : capsule_box(ia, ib, true, out);
+}
+
+float separation(const Collider& a, const Collider& b) noexcept {
+    if (a.is_box && b.is_box) {
+        return box_box_gap(a, b);
+    }
+    if (!a.is_box && !b.is_box) {
+        const Segment sa = segment_of(a);
+        const Segment sb = segment_of(b);
+        Vec3 ca;
+        Vec3 cb;
+        closest_segments(sa.p0, sa.p1, sb.p0, sb.p1, ca, cb);
+        return math::length(cb - ca) - a.radius - b.radius;
+    }
+    return a.is_box ? capsule_box_gap(b, a) : capsule_box_gap(a, b);
+}
+
+float plane_gap(const Collider& c, float height) noexcept {
+    float low = 0.0f;
+    if (c.is_box) {
+        low = c.position.y;
+        for (int k = 0; k < 3; ++k) {
+            low -= std::abs(local_axis(c, k).y) * comp(c.half, k);
+        }
+    } else {
+        low = c.position.y - std::abs(local_axis(c, 1).y) * c.half_height - c.radius;
+    }
+    return low - height;
+}
+
+int collide_plane(const Collider& c, float height, Contact* out, float margin) noexcept {
     const Vec3 up{0.0f, 1.0f, 0.0f};
+    const float top = height + margin;
     int count = 0;
     if (c.is_box) {
         for (int corner = 0; corner < 8; ++corner) {
@@ -363,7 +462,7 @@ int collide_plane(const Collider& c, float height, Contact* out) noexcept {
                 const float sign = (corner >> k) & 1 ? 1.0f : -1.0f;
                 v = v + local_axis(c, k) * (sign * comp(c.half, k));
             }
-            const float depth = height - v.y;
+            const float depth = top - v.y;
             if (depth > 0.0f) {
                 out[count++] = {v, up, depth};
             }
@@ -375,7 +474,7 @@ int collide_plane(const Collider& c, float height, Contact* out) noexcept {
     const int n = c.half_height > 0.0f ? 2 : 1;
     for (int i = 0; i < n; ++i) {
         const float low = ends[i].y - c.radius;
-        const float depth = height - low;
+        const float depth = top - low;
         if (depth > 0.0f) {
             out[count++] = {Vec3{ends[i].x, low, ends[i].z}, up, depth};
         }

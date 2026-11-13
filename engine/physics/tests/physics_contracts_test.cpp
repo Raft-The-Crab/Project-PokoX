@@ -37,6 +37,34 @@ POKO_TEST(body_descriptors_validate) {
     POKO_CHECK(poko::valid(fixed));
     fixed.type = poko::BodyType::Kinematic;
     POKO_CHECK(!poko::valid(fixed));
+
+    // Triggers are non-colliding volumes: never dynamic.
+    poko::BodyDesc trigger;
+    trigger.is_trigger = true;
+    POKO_CHECK(!poko::valid(trigger));
+    trigger.type = poko::BodyType::Static;
+    POKO_CHECK(poko::valid(trigger));
+}
+
+POKO_TEST(joint_descriptors_validate) {
+    poko::JointDesc joint;
+    POKO_CHECK(!poko::valid(joint)); // body_a is unset
+    joint.body_a = poko::make_handle(0, 0);
+    POKO_CHECK(poko::valid(joint)); // world-anchored ball joint
+    joint.body_b = poko::make_handle(0, 0);
+    POKO_CHECK(!poko::valid(joint)); // same body twice
+    joint.body_b = poko::make_handle(1, 0);
+    POKO_CHECK(poko::valid(joint));
+    joint.kind = poko::JointKind::Hinge;
+    joint.axis_a = {0.0f, 0.0f, 0.0f};
+    POKO_CHECK(!poko::valid(joint));
+    joint.axis_a = {0.0f, 1.0f, 0.0f};
+    POKO_CHECK(poko::valid(joint));
+    joint.kind = poko::JointKind::Distance;
+    joint.distance = 0.0f;
+    POKO_CHECK(!poko::valid(joint));
+    joint.distance = -1.0f; // "use current separation"
+    POKO_CHECK(poko::valid(joint));
 }
 
 POKO_TEST(rays_validate) {

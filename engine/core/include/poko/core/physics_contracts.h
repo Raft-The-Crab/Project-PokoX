@@ -59,7 +59,32 @@ struct BodyDesc {
     float restitution = 0.0f; // 0..1
     std::uint32_t collision_layer = 1;
     std::uint32_t collision_mask = 0xFFFFFFFFu;
+    // Triggers detect overlap (see CustomPhysicsWorld trigger events) but never
+    // collide. They must be Static or Kinematic.
+    bool is_trigger = false;
     std::string_view debug_name;
+};
+
+using JointHandle = TypedHandle;
+
+enum class JointKind : std::uint8_t {
+    Ball,     // anchors coincide, rotation free
+    Distance, // anchors keep a fixed distance (rod)
+    Hinge,    // anchors coincide, axes aligned (rotation about the axis only)
+    Fixed,    // anchors coincide and relative rotation is locked
+};
+
+// Anchors and axes are in each body's local space. When body_b is an invalid
+// handle the joint is anchored to the world and anchor_b / axis_b are world space.
+struct JointDesc {
+    JointKind kind = JointKind::Ball;
+    BodyHandle body_a;
+    BodyHandle body_b;
+    math::Vec3 anchor_a;
+    math::Vec3 anchor_b;
+    math::Vec3 axis_a{0.0f, 1.0f, 0.0f}; // Hinge only
+    math::Vec3 axis_b{0.0f, 1.0f, 0.0f}; // Hinge only
+    float distance = -1.0f;              // Distance only; negative = current separation
 };
 
 struct BodyState {
@@ -103,7 +128,18 @@ inline bool valid(const ShapeDesc& shape) noexcept {
 inline bool valid(const BodyDesc& desc) noexcept {
     return valid(desc.shape) && (desc.type == BodyType::Static || desc.mass > 0.0f) &&
            desc.friction >= 0.0f && desc.friction <= 1.0f && desc.restitution >= 0.0f &&
-           desc.restitution <= 1.0f;
+           desc.restitution <= 1.0f && !(desc.is_trigger && desc.type == BodyType::Dynamic);
+}
+
+inline bool valid(const JointDesc& desc) noexcept {
+    if (!is_valid(desc.body_a) || same_handle(desc.body_a, desc.body_b)) {
+        return false;
+    }
+    if (desc.kind == JointKind::Hinge &&
+        (math::length_squared(desc.axis_a) <= 0.0f || math::length_squared(desc.axis_b) <= 0.0f)) {
+        return false;
+    }
+    return desc.kind != JointKind::Distance || desc.distance != 0.0f;
 }
 
 inline bool valid(const Ray& ray) noexcept {

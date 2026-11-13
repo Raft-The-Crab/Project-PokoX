@@ -32,10 +32,21 @@ Collider make_collider(const ShapeDesc& shape, const math::Vec3& position,
 Aabb bounds(const Collider& collider) noexcept;
 
 // Writes up to kMaxContacts contacts; returns the count (0 = separated).
-int collide(const Collider& a, const Collider& b, Contact* out) noexcept;
+// With margin > 0 both shapes are inflated by margin / 2, so near-miss pairs
+// within `margin` produce contacts whose depth is margin larger than the true
+// depth (callers subtract it to get a negative, speculative depth).
+int collide(const Collider& a, const Collider& b, Contact* out, float margin = 0.0f) noexcept;
 
 // Contacts against the half-space y <= height. The plane acts as the first
-// collider, so normals point up (plane -> body).
-int collide_plane(const Collider& collider, float height, Contact* out) noexcept;
+// collider, so normals point up (plane -> body). `margin` raises the plane.
+int collide_plane(const Collider& collider, float height, Contact* out,
+                  float margin = 0.0f) noexcept;
+
+// Lower bound on the distance between two colliders (<= 0 when overlapping).
+// Safe for conservative advancement: never larger than the true distance.
+float separation(const Collider& a, const Collider& b) noexcept;
+
+// Height of the collider's lowest point above the plane (negative = below).
+float plane_gap(const Collider& collider, float height) noexcept;
 
 } // namespace poko::physics::detail

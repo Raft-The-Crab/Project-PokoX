@@ -22,6 +22,8 @@ add_library(poko_physics_custom STATIC
     src/custom_world.cpp
     src/custom_collide.cpp
     src/custom_step.cpp
+    src/custom_joints.cpp
+    src/custom_query.cpp
     src/custom_raycast.cpp)
 
 target_include_directories(poko_physics_custom PUBLIC

@@ -19,7 +19,7 @@ bool CustomPhysicsWorld::raycast(const Ray& ray, float max_distance, std::uint32
 
     for (std::size_t i = 0; i < bodies_.size(); ++i) {
         const Body& body = bodies_[i];
-        if (!body.alive || (body.collision_layer & layer_mask) == 0) {
+        if (!body.alive || body.trigger || (body.collision_layer & layer_mask) == 0) {
             continue;
         }
         float t = 0.0f;
