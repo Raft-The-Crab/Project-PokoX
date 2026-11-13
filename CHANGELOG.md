@@ -17,6 +17,8 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
 - `poko_physics_custom`: exact sphere/capsule/box narrow phase, sweep-and-prune
   broadphase, sequential-impulse solver with inertia and friction, island
   sleeping and oriented raycasts.
+- `poko_ecs`: sparse-set pools, multi-component `each`/`entities_with` queries,
+  dead-entity safety.
 - `poko_render_software`: CPU rasterizer render device (depth, culling,
   clipping, lit and textured shading, PPM readback), plus graphics primitives,
   `SceneRenderer` and the `poko_physics_showcase` demo.
