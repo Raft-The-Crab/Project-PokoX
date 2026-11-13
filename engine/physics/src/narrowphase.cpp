@@ -1,4 +1,5 @@
 #include "narrowphase.h"
+#include "poly.h"
 
 #include <algorithm>
 #include <cmath>
@@ -340,17 +341,57 @@ int rank(ShapeKind kind) noexcept {
         return 1;
     case ShapeKind::Box:
         return 2;
+    case ShapeKind::ConvexHull:
+        return 3;
+    case ShapeKind::TriangleMesh:
+        return 4;
     }
     return 0;
 }
 
+bool is_round(ShapeKind kind) noexcept {
+    return kind == ShapeKind::Sphere || kind == ShapeKind::Capsule;
+}
+
+Poly poly_of(const ShapeRef& s, const Pose& pose) {
+    return s.desc.kind == ShapeKind::Box ? poly_from_box(s.desc.half_extents, pose)
+                                         : poly_from_hull(*s.geo, pose);
+}
+
+// Shape `a` (rank <= hull) against every candidate triangle of `mesh`.
+void collide_mesh(const ShapeRef& a, const Pose& pa, const ShapeRef& mesh, const Pose& pm,
+                  Manifold& out) {
+    const Vec3 half = aabb_half_extents(a, pa.rotation);
+    std::vector<Vec3> world;
+    std::vector<std::uint32_t> ids;
+    mesh_triangles_in_box(*mesh.geo, pm, pa.position - half - Vec3{0.01f, 0.01f, 0.01f},
+                          pa.position + half + Vec3{0.01f, 0.01f, 0.01f}, world, ids);
+    const bool round = is_round(a.desc.kind);
+    Poly body_poly;
+    if (!round) body_poly = poly_of(a, pa);
+    const Segment seg = a.desc.kind == ShapeKind::Capsule ? capsule_segment(a.desc, pa) : Segment{};
+    for (std::size_t t = 0; t < ids.size(); ++t) {
+        const Poly tri = poly_from_triangle(&world[t * 3]);
+        if (a.desc.kind == ShapeKind::Sphere) {
+            ContactPoint cp;
+            if (sphere_poly(pa.position, a.desc.radius, tri, cp)) out.add_deepest(cp);
+        } else if (a.desc.kind == ShapeKind::Capsule) {
+            capsule_poly(seg.a, seg.b, a.desc.radius, tri, out);
+        } else {
+            poly_poly(body_poly, tri, out);
+        }
+    }
+}
+
 } // namespace
 
-bool collide(const ShapeDesc& a, const Pose& pa, const ShapeDesc& b, const Pose& pb,
+bool collide(const ShapeRef& ra, const Pose& pa, const ShapeRef& rb, const Pose& pb,
              Manifold& out) noexcept {
+    const ShapeDesc& a = ra.desc;
+    const ShapeDesc& b = rb.desc;
     if (rank(a.kind) > rank(b.kind)) {
         Manifold flipped;
-        const bool hit = collide(b, pb, a, pa, flipped);
+        const bool hit = collide(rb, pb, ra, pa, flipped);
         for (int i = 0; i < flipped.count; ++i) {
             ContactPoint p = flipped.points[i];
             p.normal = -p.normal;
@@ -360,6 +401,26 @@ bool collide(const ShapeDesc& a, const Pose& pa, const ShapeDesc& b, const Pose&
     }
     const int before = out.count;
     ContactPoint cp;
+    if (b.kind == ShapeKind::TriangleMesh) {
+        if (a.kind != ShapeKind::TriangleMesh && rb.geo != nullptr &&
+            (is_round(a.kind) || a.kind == ShapeKind::Box || ra.geo != nullptr)) {
+            collide_mesh(ra, pa, rb, pb, out);
+        }
+        return out.count > before;
+    }
+    if (b.kind == ShapeKind::ConvexHull) {
+        if (rb.geo == nullptr || (a.kind == ShapeKind::ConvexHull && ra.geo == nullptr)) return false;
+        const Poly hull = poly_from_hull(*rb.geo, pb);
+        if (a.kind == ShapeKind::Sphere) {
+            if (sphere_poly(pa.position, a.radius, hull, cp)) out.add(cp);
+        } else if (a.kind == ShapeKind::Capsule) {
+            const Segment s = capsule_segment(a, pa);
+            capsule_poly(s.a, s.b, a.radius, hull, out);
+        } else {
+            poly_poly(poly_of(ra, pa), hull, out);
+        }
+        return out.count > before;
+    }
     switch (a.kind) {
     case ShapeKind::Sphere:
         switch (b.kind) {
@@ -376,24 +437,28 @@ bool collide(const ShapeDesc& a, const Pose& pa, const ShapeDesc& b, const Pose&
         case ShapeKind::Box:
             if (sphere_obb_contact(pa.position, a.radius, make_obb(b, pb), cp)) out.add(cp);
             break;
+        default:
+            break;
         }
         break;
     case ShapeKind::Capsule:
         if (b.kind == ShapeKind::Capsule) {
             capsule_capsule(capsule_segment(a, pa), a.radius, capsule_segment(b, pb), b.radius, out);
-        } else {
+        } else if (b.kind == ShapeKind::Box) {
             capsule_obb(capsule_segment(a, pa), a.radius, make_obb(b, pb), out);
         }
         break;
     case ShapeKind::Box:
-        box_box(make_obb(a, pa), make_obb(b, pb), out);
+        if (b.kind == ShapeKind::Box) box_box(make_obb(a, pa), make_obb(b, pb), out);
+        break;
+    default:
         break;
     }
     return out.count > before;
 }
 
-bool collide_ground(const ShapeDesc& shape, const Pose& pose, float height,
-                    Manifold& out) noexcept {
+bool collide_ground(const ShapeRef& ref, const Pose& pose, float height, Manifold& out) noexcept {
+    const ShapeDesc& shape = ref.desc;
     const int before = out.count;
     const Vec3 down{0.0f, -1.0f, 0.0f};
     const auto add_sphere = [&](const Vec3& c, float r) {
@@ -425,11 +490,23 @@ bool collide_ground(const ShapeDesc& shape, const Pose& pose, float height,
         }
         break;
     }
+    case ShapeKind::ConvexHull: {
+        if (ref.geo == nullptr) break;
+        for (const Vec3& v : ref.geo->vertices) {
+            const Vec3 corner = pose.position + math::rotate(pose.rotation, v);
+            const float depth = height - corner.y;
+            if (depth > 0.0f) out.add_deepest({Vec3{corner.x, height, corner.z}, down, depth});
+        }
+        break;
+    }
+    case ShapeKind::TriangleMesh: // meshes are static; the ground never touches them
+        break;
     }
     return out.count > before;
 }
 
-Vec3 aabb_half_extents(const ShapeDesc& shape, const math::Quat& rotation) noexcept {
+Vec3 aabb_half_extents(const ShapeRef& ref, const math::Quat& rotation) noexcept {
+    const ShapeDesc& shape = ref.desc;
     switch (shape.kind) {
     case ShapeKind::Sphere:
         return {shape.radius, shape.radius, shape.radius};
@@ -449,9 +526,46 @@ Vec3 aabb_half_extents(const ShapeDesc& shape, const math::Quat& rotation) noexc
         }
         return h;
     }
+    case ShapeKind::ConvexHull:
+    case ShapeKind::TriangleMesh: {
+        if (ref.geo == nullptr) return {};
+        // |R| * half: a box about the origin containing the rotated local box.
+        const Vec3 ax[3] = {math::rotate(rotation, Vec3{1, 0, 0}), math::rotate(rotation, Vec3{0, 1, 0}),
+                            math::rotate(rotation, Vec3{0, 0, 1})};
+        const float h[3] = {ref.geo->half.x, ref.geo->half.y, ref.geo->half.z};
+        Vec3 out{};
+        for (int i = 0; i < 3; ++i) {
+            out.x += std::abs(ax[i].x) * h[i];
+            out.y += std::abs(ax[i].y) * h[i];
+            out.z += std::abs(ax[i].z) * h[i];
+        }
+        return out;
+    }
     }
     return {};
 }
+
+void mesh_triangles_in_box(const Geometry& mesh, const Pose& pose, const Vec3& lo, const Vec3& hi,
+                           std::vector<Vec3>& world_vertices, std::vector<std::uint32_t>& triangle_ids) {
+    // Bring the world box into mesh space (its bounds, conservatively).
+    const math::Quat inv = math::conjugate(pose.rotation);
+    Vec3 llo{1.0e30f, 1.0e30f, 1.0e30f};
+    Vec3 lhi{-1.0e30f, -1.0e30f, -1.0e30f};
+    for (int i = 0; i < 8; ++i) {
+        const Vec3 corner{(i & 1) ? hi.x : lo.x, (i & 2) ? hi.y : lo.y, (i & 4) ? hi.z : lo.z};
+        const Vec3 local = math::rotate(inv, corner - pose.position);
+        llo = {std::min(llo.x, local.x), std::min(llo.y, local.y), std::min(llo.z, local.z)};
+        lhi = {std::max(lhi.x, local.x), std::max(lhi.y, local.y), std::max(lhi.z, local.z)};
+    }
+    mesh_query(mesh, llo, lhi, triangle_ids);
+    std::sort(triangle_ids.begin(), triangle_ids.end()); // deterministic order
+    for (const auto t : triangle_ids) {
+        Vec3 tri[3];
+        mesh_triangle(mesh, t, tri);
+        for (const Vec3& v : tri) world_vertices.push_back(pose.position + math::rotate(pose.rotation, v));
+    }
+}
+
 
 namespace {
 
@@ -478,8 +592,9 @@ bool ray_sphere_t(const Vec3& o, const Vec3& d, const Vec3& c, float r, float ma
 
 } // namespace
 
-bool ray_shape(const Vec3& origin, const Vec3& direction, const ShapeDesc& shape, const Pose& pose,
+bool ray_shape(const Vec3& origin, const Vec3& direction, const ShapeRef& ref, const Pose& pose,
                float max_distance, float& out_t, Vec3& out_normal) noexcept {
+    const ShapeDesc& shape = ref.desc;
     switch (shape.kind) {
     case ShapeKind::Sphere: {
         if (!ray_sphere_t(origin, direction, pose.position, shape.radius, max_distance, out_t)) {
@@ -564,6 +679,109 @@ bool ray_shape(const Vec3& origin, const Vec3& direction, const ShapeDesc& shape
                     hit = true;
                     local_n = math::normalize(p - center);
                 }
+            }
+        }
+        if (!hit) return false;
+        out_t = best;
+        out_normal = math::rotate(pose.rotation, local_n);
+        return true;
+    }
+    case ShapeKind::ConvexHull: {
+        if (ref.geo == nullptr) return false;
+        const math::Quat inv = math::conjugate(pose.rotation);
+        const Vec3 o = math::rotate(inv, origin - pose.position);
+        const Vec3 d = math::rotate(inv, direction);
+        float t_in = 0.0f;
+        float t_out = max_distance;
+        Vec3 n_in{};
+        bool entered = false;
+        for (const HullFace& f : ref.geo->faces) {
+            const float denom = math::dot(f.normal, d);
+            const float numer = f.offset - math::dot(f.normal, o);
+            if (std::abs(denom) < 1.0e-9f) {
+                if (numer < 0.0f) return false; // parallel and outside this face
+                continue;
+            }
+            const float t = numer / denom;
+            if (denom < 0.0f) {
+                if (t > t_in) {
+                    t_in = t;
+                    n_in = f.normal;
+                    entered = true;
+                }
+            } else {
+                t_out = std::min(t_out, t);
+            }
+            if (t_in > t_out) return false;
+        }
+        out_t = t_in;
+        out_normal = math::rotate(pose.rotation, entered ? n_in : -d); // origin inside: -dir
+        return true;
+    }
+    case ShapeKind::TriangleMesh: {
+        if (ref.geo == nullptr || ref.geo->nodes.empty()) return false;
+        const Geometry& g = *ref.geo;
+        const math::Quat inv = math::conjugate(pose.rotation);
+        const Vec3 o = math::rotate(inv, origin - pose.position);
+        const Vec3 d = math::rotate(inv, direction);
+        float best = max_distance;
+        bool hit = false;
+        Vec3 local_n{};
+        std::int32_t stack[64];
+        int top = 0;
+        stack[top++] = 0;
+        while (top > 0) {
+            const BvhNode& node = g.nodes[static_cast<std::size_t>(stack[--top])];
+            // Slab test against the node bounds, limited to the best hit so far.
+            float t0 = 0.0f;
+            float t1 = best;
+            bool inside = true;
+            const float oa[3] = {o.x, o.y, o.z};
+            const float da[3] = {d.x, d.y, d.z};
+            const float lo[3] = {node.lo.x, node.lo.y, node.lo.z};
+            const float hi[3] = {node.hi.x, node.hi.y, node.hi.z};
+            for (int i = 0; i < 3 && inside; ++i) {
+                if (std::abs(da[i]) < 1.0e-9f) {
+                    if (oa[i] < lo[i] || oa[i] > hi[i]) inside = false;
+                    continue;
+                }
+                float a = (lo[i] - oa[i]) / da[i];
+                float b = (hi[i] - oa[i]) / da[i];
+                if (a > b) std::swap(a, b);
+                t0 = std::max(t0, a);
+                t1 = std::min(t1, b);
+                if (t0 > t1) inside = false;
+            }
+            if (!inside) continue;
+            if (node.left >= 0) {
+                if (top + 2 <= 64) {
+                    stack[top++] = node.left;
+                    stack[top++] = node.right;
+                }
+                continue;
+            }
+            for (std::uint32_t i = node.first; i < node.first + node.count; ++i) {
+                Vec3 tri[3];
+                mesh_triangle(g, g.tri_order[i], tri);
+                // Moeller-Trumbore, two-sided.
+                const Vec3 e1 = tri[1] - tri[0];
+                const Vec3 e2 = tri[2] - tri[0];
+                const Vec3 p = math::cross(d, e2);
+                const float det = math::dot(e1, p);
+                if (std::abs(det) < 1.0e-12f) continue;
+                const float inv_det = 1.0f / det;
+                const Vec3 s = o - tri[0];
+                const float u = math::dot(s, p) * inv_det;
+                if (u < 0.0f || u > 1.0f) continue;
+                const Vec3 q = math::cross(s, e1);
+                const float v = math::dot(d, q) * inv_det;
+                if (v < 0.0f || u + v > 1.0f) continue;
+                const float t = math::dot(e2, q) * inv_det;
+                if (t < 0.0f || t >= best) continue;
+                best = t;
+                hit = true;
+                Vec3 n = math::normalize(math::cross(e1, e2));
+                local_n = math::dot(n, d) > 0.0f ? -n : n; // face the ray
             }
         }
         if (!hit) return false;

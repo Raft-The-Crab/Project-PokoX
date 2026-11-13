@@ -2,7 +2,9 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <span>
 #include <vector>
 
 #include "poko/core/api_seams.h"
@@ -11,9 +13,11 @@ namespace poko {
 
 namespace physics::detail {
 struct JointRow;
+struct Geometry;
 }
 
 using JointHandle = TypedHandle;
+using GeometryHandle = TypedHandle;
 
 enum class JointType : std::uint8_t {
     Ball,   // shared anchor point, free rotation
@@ -50,7 +54,8 @@ struct JointDesc {
 // Thread-safety contract: synchronised; any thread may call any method.
 class CustomPhysicsWorld final : public api::IPhysicsWorld {
 public:
-    CustomPhysicsWorld() = default;
+    CustomPhysicsWorld();
+    ~CustomPhysicsWorld();
 
     bool initialize(const PhysicsWorldDesc& desc) noexcept override;
     Result<BodyHandle> create_body(const BodyDesc& desc) override;
@@ -79,6 +84,17 @@ public:
     // ball and fixed joints.
     Result<float> joint_position(JointHandle joint) const;
     std::uint32_t joint_count() const noexcept;
+
+    // Collision geometry. Hull and mesh points are relative to the body origin,
+    // which is treated as the centre of mass. A hull needs 4-256 non-coplanar
+    // points; its inertia is the diagonal of the exact tensor about the origin
+    // (exact for symmetric hulls). Meshes are for static bodies only and are
+    // two-sided; degenerate triangles are dropped. A geometry can be destroyed
+    // only once no body uses it.
+    Result<GeometryHandle> create_convex_hull(std::span<const math::Vec3> points);
+    Result<GeometryHandle> create_triangle_mesh(std::span<const math::Vec3> vertices,
+                                                std::span<const std::uint32_t> indices);
+    Status destroy_geometry(GeometryHandle geometry);
 
     // Sleeping: an island of dynamic bodies at rest for `sleep_time` seconds
     // stops simulating until touched by a moving body or modified.
@@ -112,6 +128,7 @@ private:
         bool sleeping = false;
         float sleep_timer = 0.0f;
         BodyState last_good{}; // most recent finite state, for recovery
+        const physics::detail::Geometry* geometry = nullptr; // hull / mesh shapes
     };
 
     struct Joint {
@@ -164,6 +181,9 @@ private:
     std::vector<Body> bodies_;
     std::vector<Generation> generations_;
     std::vector<HandleIndex> free_;
+    std::vector<std::shared_ptr<physics::detail::Geometry>> geometries_;
+    std::vector<Generation> geometry_generations_;
+    std::vector<HandleIndex> geometry_free_;
     std::vector<Joint> joints_;
     std::vector<Generation> joint_generations_;
     std::vector<HandleIndex> joint_free_;

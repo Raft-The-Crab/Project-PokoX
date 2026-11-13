@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstddef>
 
+#include "geometry.h"
+
 namespace poko {
 
 namespace {
@@ -24,7 +26,8 @@ BodyState sanitized(BodyState s) noexcept {
 
 
 // Diagonal of the inverse local inertia tensor for a solid shape of `mass`.
-math::Vec3 inverse_inertia(const ShapeDesc& shape, float mass) noexcept {
+math::Vec3 inverse_inertia(const ShapeDesc& shape, float mass,
+                          const physics::detail::Geometry* geometry) noexcept {
     float ix = 0.0f;
     float iy = 0.0f;
     float iz = 0.0f;
@@ -51,6 +54,15 @@ math::Vec3 inverse_inertia(const ShapeDesc& shape, float mass) noexcept {
                   ms * (0.4f * r * r + height * height / 4.0f + 0.375f * height * r);
         break;
     }
+    case ShapeKind::ConvexHull:
+        if (geometry != nullptr) {
+            ix = mass * geometry->inertia_per_mass.x;
+            iy = mass * geometry->inertia_per_mass.y;
+            iz = mass * geometry->inertia_per_mass.z;
+        }
+        break;
+    case ShapeKind::TriangleMesh: // static only: no inertia
+        break;
     }
     const auto inv = [](float v) { return v > 1.0e-9f ? 1.0f / v : 0.0f; };
     return {inv(ix), inv(iy), inv(iz)};
@@ -109,6 +121,20 @@ Result<BodyHandle> CustomPhysicsWorld::create_body(const BodyDesc& desc) {
     if (!finite_state(initial) || !std::isfinite(desc.mass)) {
         return Result<BodyHandle>::fail(ErrorCode::InvalidArgument, "non-finite body state");
     }
+    const physics::detail::Geometry* geometry = nullptr;
+    if (desc.shape.kind == ShapeKind::ConvexHull || desc.shape.kind == ShapeKind::TriangleMesh) {
+        const auto g = desc.shape.geometry;
+        const bool live = static_cast<std::size_t>(g.index) < geometries_.size() &&
+                          geometry_generations_[g.index] == g.generation && geometries_[g.index] != nullptr;
+        const bool wants_hull = desc.shape.kind == ShapeKind::ConvexHull;
+        if (!live || (geometries_[g.index]->kind == physics::detail::Geometry::Kind::Hull) != wants_hull) {
+            return Result<BodyHandle>::fail(ErrorCode::InvalidArgument, "shape geometry is missing or of the wrong kind");
+        }
+        if (!wants_hull && desc.type != BodyType::Static) {
+            return Result<BodyHandle>::fail(ErrorCode::InvalidArgument, "triangle meshes are static only");
+        }
+        geometry = geometries_[g.index].get();
+    }
     HandleIndex index;
     if (!free_.empty()) {
         index = free_.back();
@@ -126,7 +152,9 @@ Result<BodyHandle> CustomPhysicsWorld::create_body(const BodyDesc& desc) {
     body.state = sanitized(initial);
     body.last_good = body.state;
     body.mass = desc.type == BodyType::Static ? 0.0f : desc.mass;
-    body.inv_inertia = desc.type == BodyType::Dynamic ? inverse_inertia(desc.shape, desc.mass) : math::Vec3{};
+    body.geometry = geometry;
+    if (geometry != nullptr) ++geometries_[desc.shape.geometry.index]->users;
+    body.inv_inertia = desc.type == BodyType::Dynamic ? inverse_inertia(desc.shape, desc.mass, geometry) : math::Vec3{};
     body.friction = desc.friction;
     body.restitution = desc.restitution;
     body.collision_layer = desc.collision_layer;
@@ -162,6 +190,13 @@ Status CustomPhysicsWorld::destroy_body(BodyHandle body) {
         } else {
             ++it;
         }
+    }
+    if (bodies_[body.index].geometry != nullptr) {
+        const auto* geo = bodies_[body.index].geometry;
+        for (auto& owned : geometries_) {
+            if (owned.get() == geo) --owned->users;
+        }
+        bodies_[body.index].geometry = nullptr;
     }
     bodies_[body.index].alive = false;
     ++generations_[body.index];

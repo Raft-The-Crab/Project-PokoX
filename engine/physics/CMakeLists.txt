@@ -24,7 +24,10 @@ add_library(poko_physics_custom STATIC
     src/custom_raycast.cpp
     src/narrowphase.cpp
     src/custom_joints.cpp
-    src/gjk.cpp)
+    src/gjk.cpp
+    src/geometry.cpp
+    src/poly.cpp
+    src/custom_geometry.cpp)
 
 target_include_directories(poko_physics_custom PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -38,4 +41,5 @@ poko_add_unit_tests(poko_physics_custom
         physics_solver_test.cpp
         physics_joint_test.cpp
         physics_ccd_test.cpp
-        physics_robustness_test.cpp)
+        physics_robustness_test.cpp
+        physics_geometry_test.cpp)

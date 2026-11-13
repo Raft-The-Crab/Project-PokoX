@@ -1,6 +1,6 @@
 #pragma once
 
-#include "poko/core/physics_contracts.h"
+#include "shape_ref.h"
 
 namespace poko::physics::detail {
 
@@ -9,21 +9,33 @@ namespace poko::physics::detail {
 // capsule = segment core, box = box core with zero margin. GJK works on cores,
 // so distances between rounded shapes are exact and cheap.
 struct ConvexCore {
-    enum class Kind : std::uint8_t { Point, Segment, Box } kind = Kind::Point;
+    enum class Kind : std::uint8_t { Point, Segment, Box, Hull } kind = Kind::Point;
     math::Vec3 center{};
     math::Vec3 p0{};
     math::Vec3 p1{};
     math::Vec3 axes[3]{};
     math::Vec3 half{};
+    // Hull: vertices in local space (not owned); world = center + axes * local.
+    const math::Vec3* verts = nullptr;
+    int vert_count = 0;
     float margin = 0.0f;
 };
 
-ConvexCore make_core(const ShapeDesc& shape, const math::Vec3& position,
+// What a convex query operates on: a primitive or hull (desc + geo), or a single
+// mesh triangle given by three vertices in the owning body's local space.
+struct ConvexSource {
+    const ShapeDesc* desc = nullptr;
+    const Geometry* geo = nullptr;
+    const math::Vec3* triangle = nullptr;
+    float triangle_radius = 0.0f;
+};
+
+ConvexCore make_core(const ConvexSource& source, const math::Vec3& position,
                      const math::Quat& rotation) noexcept;
 math::Vec3 support(const ConvexCore& core, const math::Vec3& direction) noexcept;
 
 // Farthest distance from the body origin to any point of the shape.
-float bounding_radius(const ShapeDesc& shape) noexcept;
+float bounding_radius(const ConvexSource& source) noexcept;
 
 struct CoreDistance {
     float distance = 0.0f; // between cores; 0 when they intersect
@@ -55,7 +67,7 @@ struct ImpactResult {
 // (moving) comes within `tolerance` of shape B, accounting for rotation of both.
 // Returns false for a miss, for shapes already overlapping or touching and
 // separating at t = 0 (the contact solver owns those).
-bool time_of_impact(const ShapeDesc& shape_a, const Motion& a, const ShapeDesc& shape_b,
+bool time_of_impact(const ConvexSource& shape_a, const Motion& a, const ConvexSource& shape_b,
                     const Motion& b, float duration, float tolerance, ImpactResult& out) noexcept;
 
 } // namespace poko::physics::detail

@@ -25,7 +25,7 @@ bool CustomPhysicsWorld::raycast(const Ray& ray, float max_distance, std::uint32
         float t = 0.0f;
         math::Vec3 normal{};
         if (!physics::detail::ray_shape(
-                ray.origin, direction, body.shape,
+                ray.origin, direction, physics::detail::ShapeRef{body.shape, body.geometry},
                 physics::detail::Pose{body.state.position, body.state.rotation}, best, t, normal) ||
             t >= best) {
             continue;

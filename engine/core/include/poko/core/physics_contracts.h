@@ -33,11 +33,14 @@ enum class ShapeKind : std::uint8_t {
     Sphere,
     Box,
     Capsule,
+    ConvexHull,   // geometry handle from CustomPhysicsWorld::create_convex_hull
+    TriangleMesh, // geometry handle from create_triangle_mesh; static bodies only
 };
 
 // Flat POD shape description; unused fields are ignored per kind.
 //   Sphere:  radius
 //   Box:     half_extents (full size = 2 * half_extents)
+//   ConvexHull / TriangleMesh: geometry (points are relative to the body origin)
 //   Capsule: radius + half_height (cylinder mid-section half height;
 //            total half height = half_height + radius)
 struct ShapeDesc {
@@ -45,6 +48,7 @@ struct ShapeDesc {
     float radius = 0.5f;
     math::Vec3 half_extents{0.5f, 0.5f, 0.5f};
     float half_height = 0.0f;
+    TypedHandle geometry{}; // ConvexHull and TriangleMesh only
 };
 
 struct BodyDesc {
@@ -96,6 +100,9 @@ inline bool valid(const ShapeDesc& shape) noexcept {
                shape.half_extents.z > 0.0f;
     case ShapeKind::Capsule:
         return shape.radius > 0.0f && shape.half_height >= 0.0f;
+    case ShapeKind::ConvexHull:
+    case ShapeKind::TriangleMesh:
+        return is_valid(shape.geometry);
     }
     return false;
 }

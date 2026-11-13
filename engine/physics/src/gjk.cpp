@@ -179,9 +179,19 @@ bool reduce(Simplex& s, Vec3& v) noexcept {
 
 } // namespace
 
-ConvexCore make_core(const ShapeDesc& shape, const Vec3& position, const math::Quat& rotation) noexcept {
+ConvexCore make_core(const ConvexSource& source, const Vec3& position, const math::Quat& rotation) noexcept {
     ConvexCore c;
     c.center = position;
+    c.axes[0] = math::rotate(rotation, Vec3{1, 0, 0});
+    c.axes[1] = math::rotate(rotation, Vec3{0, 1, 0});
+    c.axes[2] = math::rotate(rotation, Vec3{0, 0, 1});
+    if (source.triangle != nullptr) {
+        c.kind = ConvexCore::Kind::Hull;
+        c.verts = source.triangle;
+        c.vert_count = 3;
+        return c;
+    }
+    const ShapeDesc& shape = *source.desc;
     switch (shape.kind) {
     case ShapeKind::Sphere:
         c.kind = ConvexCore::Kind::Point;
@@ -198,10 +208,15 @@ ConvexCore make_core(const ShapeDesc& shape, const Vec3& position, const math::Q
     }
     case ShapeKind::Box:
         c.kind = ConvexCore::Kind::Box;
-        c.axes[0] = math::rotate(rotation, Vec3{1, 0, 0});
-        c.axes[1] = math::rotate(rotation, Vec3{0, 1, 0});
-        c.axes[2] = math::rotate(rotation, Vec3{0, 0, 1});
         c.half = shape.half_extents;
+        break;
+    case ShapeKind::ConvexHull:
+    case ShapeKind::TriangleMesh: // a whole mesh is never one convex core; callers go triangle by triangle
+        c.kind = ConvexCore::Kind::Hull;
+        if (source.geo != nullptr) {
+            c.verts = source.geo->vertices.data();
+            c.vert_count = static_cast<int>(source.geo->vertices.size());
+        }
         break;
     }
     return c;
@@ -221,11 +236,29 @@ Vec3 support(const ConvexCore& core, const Vec3& d) noexcept {
         }
         return p;
     }
+    case ConvexCore::Kind::Hull: {
+        // Search in local space so the vertex array never needs transforming.
+        const Vec3 local{math::dot(d, core.axes[0]), math::dot(d, core.axes[1]),
+                         math::dot(d, core.axes[2])};
+        float best = -1.0e30f;
+        const Vec3* pick = core.verts;
+        for (int i = 0; i < core.vert_count; ++i) {
+            const float s = math::dot(local, core.verts[i]);
+            if (s > best) {
+                best = s;
+                pick = core.verts + i;
+            }
+        }
+        if (pick == nullptr) return core.center;
+        return core.center + core.axes[0] * pick->x + core.axes[1] * pick->y + core.axes[2] * pick->z;
+    }
     }
     return core.center;
 }
 
-float bounding_radius(const ShapeDesc& shape) noexcept {
+float bounding_radius(const ConvexSource& source) noexcept {
+    if (source.triangle != nullptr) return source.triangle_radius;
+    const ShapeDesc& shape = *source.desc;
     switch (shape.kind) {
     case ShapeKind::Sphere:
         return shape.radius;
@@ -233,6 +266,9 @@ float bounding_radius(const ShapeDesc& shape) noexcept {
         return shape.radius + shape.half_height;
     case ShapeKind::Box:
         return math::length(shape.half_extents);
+    case ShapeKind::ConvexHull:
+    case ShapeKind::TriangleMesh:
+        return source.geo != nullptr ? source.geo->radius : 0.0f;
     }
     return shape.radius;
 }
@@ -303,7 +339,7 @@ math::Quat advance_rotation(const math::Quat& rotation, const Vec3& spin, float 
     return math::multiply(math::quat_from_axis_angle(spin / speed, speed * t), rotation);
 }
 
-bool time_of_impact(const ShapeDesc& shape_a, const Motion& a, const ShapeDesc& shape_b,
+bool time_of_impact(const ConvexSource& shape_a, const Motion& a, const ConvexSource& shape_b,
                     const Motion& b, float duration, float tolerance, ImpactResult& out) noexcept {
     const float bound = math::length(a.velocity - b.velocity) +
                         math::length(a.spin) * bounding_radius(shape_a) +

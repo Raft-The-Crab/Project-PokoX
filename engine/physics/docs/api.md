@@ -61,8 +61,22 @@ axis), driven with `set_joint_motor`, read with `joint_position`; jointed bodies
 do not collide unless `collide_connected`, share one sleep island and are
 destroyed with their bodies.
 
+**Shapes beyond primitives.** `create_convex_hull(points)` builds the hull of 4-256
+points (incremental hull, coplanar triangles merged into polygon faces, edges with
+adjacent faces); `create_triangle_mesh(vertices, indices)` builds a mesh with a BVH
+(up to 100k triangles, degenerate triangles dropped). Bodies reference them through
+`ShapeDesc::geometry`. Hulls collide with everything through polyhedron SAT with
+face clipping and edge-edge axes (pruned by Minkowski-face tests), spheres and
+capsules through GJK closest points with a face fallback when deeply inside, and
+the ground through their vertices. Meshes are static, two-sided and queried by BVH:
+each triangle is tested like a flat polyhedron. Raycasts and CCD work on both. Hull
+points are relative to the body origin, treated as the centre of mass; inertia is
+the diagonal of the exact tensor about the origin. Limits: mesh edge-edge axes are
+skipped (face contacts only), so a box landing exactly on a convex mesh ridge can
+look slightly off; internal mesh edges can produce small ghost contacts.
+
 **Not yet done:** 
-convex-hull and triangle-mesh shapes, triggers and events, shape
+triggers and events, shape
 casts, spring and cone joints.
 
 Public headers live under `include/poko/physics/`; sources under `src/`;

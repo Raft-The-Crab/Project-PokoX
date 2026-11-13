@@ -14,7 +14,8 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
 
 ### Added
 
-- `poko_physics_custom`: input validation, speed and push-out limits, backlog cap,
+- `poko_physics_custom`: convex-hull and triangle-mesh shapes (SAT clipping, BVH,
+  raycasts, CCD); input validation, speed and push-out limits, backlog cap,
   kinematic wake-up; exact (GJK time-of-impact) continuous collision detection including rotation, joints (ball, fixed, hinge, slider with limits and
   motors), contact warm starting and rest damping; exact sphere/capsule/box narrow phase, sweep-and-prune
   broadphase, sequential-impulse solver with inertia and friction, island

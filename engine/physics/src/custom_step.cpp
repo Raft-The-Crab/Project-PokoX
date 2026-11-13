@@ -14,6 +14,7 @@ namespace poko {
 namespace {
 
 using math::Vec3;
+using physics::detail::ShapeRef;
 
 constexpr int kVelocityIterations = 12;
 constexpr int kPositionIterations = 4;
@@ -67,13 +68,18 @@ Vec3 perpendicular(const Vec3& n) noexcept {
 
 // Radius of the largest sphere that fits inside the shape: the thickness the
 // body must be moving relative to before CCD matters.
-float inner_radius(const ShapeDesc& shape) noexcept {
+float inner_radius(const ShapeRef& ref) noexcept {
+    const ShapeDesc& shape = ref.desc;
     switch (shape.kind) {
     case ShapeKind::Sphere:
     case ShapeKind::Capsule:
         return shape.radius;
     case ShapeKind::Box:
         return std::min({shape.half_extents.x, shape.half_extents.y, shape.half_extents.z});
+    case ShapeKind::ConvexHull:
+        return ref.geo != nullptr ? ref.geo->inner : 0.1f;
+    case ShapeKind::TriangleMesh:
+        return 1.0e30f; // static: never swept as the mover
     }
     return shape.radius;
 }
@@ -105,7 +111,7 @@ void CustomPhysicsWorld::substep(float h) {
     for (std::size_t i = 0; i < count; ++i) {
         const Body& body = bodies_[i];
         if (!body.alive) continue;
-        const Vec3 half = aabb_half_extents(body.shape, body.state.rotation);
+        const Vec3 half = aabb_half_extents(ShapeRef{body.shape, body.geometry}, body.state.rotation);
         entries.push_back({body.state.position - half, body.state.position + half, static_cast<int>(i)});
     }
     std::sort(entries.begin(), entries.end(), [](const Entry& l, const Entry& r) {
@@ -235,7 +241,8 @@ void CustomPhysicsWorld::substep(float h) {
         const Body& ba = bodies_[static_cast<std::size_t>(p.a)];
         const Body& bb = bodies_[static_cast<std::size_t>(p.b)];
         Manifold m;
-        if (!collide(ba.shape, Pose{ba.state.position, ba.state.rotation}, bb.shape,
+        if (!collide(ShapeRef{ba.shape, ba.geometry}, Pose{ba.state.position, ba.state.rotation},
+                     ShapeRef{bb.shape, bb.geometry},
                      Pose{bb.state.position, bb.state.rotation}, m)) {
             continue;
         }
@@ -247,7 +254,7 @@ void CustomPhysicsWorld::substep(float h) {
             const Body& body = bodies_[i];
             if (!body.alive || !awake_dynamic(body)) continue;
             Manifold m;
-            if (collide_ground(body.shape, Pose{body.state.position, body.state.rotation},
+            if (collide_ground(ShapeRef{body.shape, body.geometry}, Pose{body.state.position, body.state.rotation},
                                ground_height_, m)) {
                 add_constraints(static_cast<int>(i), -1, m, std::sqrt(body.friction),
                                 body.restitution);
@@ -462,10 +469,10 @@ void CustomPhysicsWorld::substep(float h) {
             const bool moves = body.type == BodyType::Kinematic || awake_dynamic(body);
             const float reach = moves ? (math::length(body.state.velocity) +
                                          math::length(body.state.angular_velocity) *
-                                             bounding_radius(body.shape)) * h
+                                             bounding_radius(ConvexSource{&body.shape, body.geometry, nullptr, 0.0f})) * h
                                       : 0.0f;
-            swept[i] = {aabb_half_extents(body.shape, body.state.rotation), reach};
-            if (awake_dynamic(body) && reach >= 0.5f * inner_radius(body.shape)) fast.push_back(i);
+            swept[i] = {aabb_half_extents(ShapeRef{body.shape, body.geometry}, body.state.rotation), reach};
+            if (awake_dynamic(body) && reach >= 0.5f * inner_radius(ShapeRef{body.shape, body.geometry})) fast.push_back(i);
         }
         for (const std::size_t i : fast) {
             const Body& body = bodies_[i];
@@ -496,14 +503,31 @@ void CustomPhysicsWorld::substep(float h) {
                     mb.velocity = other.state.velocity;
                     mb.spin = other.state.angular_velocity;
                 }
-                ImpactResult hit;
-                if (!time_of_impact(body.shape, ma, other.shape, mb, earliest, kCcdTolerance, hit)) {
-                    continue;
+                const ConvexSource src_a{&body.shape, body.geometry, nullptr, 0.0f};
+                const auto consider = [&](const ConvexSource& src_b) {
+                    ImpactResult hit;
+                    if (!time_of_impact(src_a, ma, src_b, mb, earliest, kCcdTolerance, hit)) return;
+                    // Stop kCcdPenetration inside contact so a real contact exists next step.
+                    const float push = kCcdPenetration / std::max(hit.closing, 1.0e-3f);
+                    earliest = std::min(earliest, hit.time);
+                    stop = std::min(stop, std::min(h, hit.time + push));
+                };
+                if (other.shape.kind == ShapeKind::TriangleMesh && other.geometry != nullptr) {
+                    // Sweep against each mesh triangle near the swept bounds, in mesh space.
+                    std::vector<Vec3> world;
+                    std::vector<std::uint32_t> ids;
+                    const Vec3 reach_box = swept[i].half + Vec3{swept[i].reach, swept[i].reach, swept[i].reach};
+                    mesh_triangles_in_box(*other.geometry, Pose{other.state.position, other.state.rotation},
+                                          body.state.position - reach_box, body.state.position + reach_box,
+                                          world, ids);
+                    for (const std::uint32_t id : ids) {
+                        Vec3 tri[3];
+                        mesh_triangle(*other.geometry, id, tri);
+                        consider(ConvexSource{nullptr, nullptr, tri, other.geometry->radius});
+                    }
+                } else {
+                    consider(ConvexSource{&other.shape, other.geometry, nullptr, 0.0f});
                 }
-                // Stop kCcdPenetration inside contact so a real contact exists next step.
-                const float push = kCcdPenetration / std::max(hit.closing, 1.0e-3f);
-                earliest = std::min(earliest, hit.time);
-                stop = std::min(stop, std::min(h, hit.time + push));
             }
             if (stop < h) {
                 motion_scale[i] = stop / h;
