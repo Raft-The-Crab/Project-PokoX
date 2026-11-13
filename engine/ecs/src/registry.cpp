@@ -19,7 +19,7 @@ Entity Registry::create_entity() {
 
 void Registry::destroy_entity(Entity entity) {
     std::lock_guard<std::mutex> guard(mutex_);
-    if (!alive(entity)) {
+    if (!alive_locked(entity)) {
         return;
     }
     for (auto& [key, pool] : pools_) {
@@ -43,6 +43,11 @@ std::uint32_t Registry::entity_count() const noexcept {
 }
 
 bool Registry::alive(Entity entity) const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return alive_locked(entity);
+}
+
+bool Registry::alive_locked(Entity entity) const noexcept {
     return is_valid(entity) && static_cast<std::size_t>(entity.index) < alive_.size() &&
            generations_[entity.index] == entity.generation && alive_[entity.index];
 }

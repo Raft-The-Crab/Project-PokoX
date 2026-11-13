@@ -29,6 +29,14 @@ POKO_TEST(body_descriptors_validate) {
     body.mass = 1.0f;
     body.friction = 1.5f;
     POKO_CHECK(!poko::valid(body));
+
+    // Mass is ignored for static bodies, so zero mass is legal there only.
+    poko::BodyDesc fixed;
+    fixed.type = poko::BodyType::Static;
+    fixed.mass = 0.0f;
+    POKO_CHECK(poko::valid(fixed));
+    fixed.type = poko::BodyType::Kinematic;
+    POKO_CHECK(!poko::valid(fixed));
 }
 
 POKO_TEST(rays_validate) {

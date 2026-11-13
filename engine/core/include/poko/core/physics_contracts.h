@@ -101,8 +101,9 @@ inline bool valid(const ShapeDesc& shape) noexcept {
 }
 
 inline bool valid(const BodyDesc& desc) noexcept {
-    return valid(desc.shape) && desc.mass > 0.0f && desc.friction >= 0.0f &&
-           desc.friction <= 1.0f && desc.restitution >= 0.0f && desc.restitution <= 1.0f;
+    return valid(desc.shape) && (desc.type == BodyType::Static || desc.mass > 0.0f) &&
+           desc.friction >= 0.0f && desc.friction <= 1.0f && desc.restitution >= 0.0f &&
+           desc.restitution <= 1.0f;
 }
 
 inline bool valid(const Ray& ray) noexcept {

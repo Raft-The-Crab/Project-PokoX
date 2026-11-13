@@ -73,4 +73,26 @@ POKO_TEST(stale_generation_gets_nothing) {
     POKO_CHECK(registry.get_component<Position>(e) == nullptr);
 }
 
+POKO_TEST(dead_entity_rejects_components) {
+    poko::ecs::Registry registry;
+    const auto e = registry.create_entity();
+    registry.destroy_entity(e);
+    POKO_CHECK(!registry.add_component(e, Position{}));
+    POKO_CHECK(!registry.has_component<Position>(e));
+
+    // A reused slot must not inherit anything stored through the stale handle.
+    const auto reused = registry.create_entity();
+    POKO_CHECK(!registry.has_component<Position>(reused));
+}
+
+POKO_TEST(const_queries_do_not_create_pools) {
+    poko::ecs::Registry registry;
+    const auto e = registry.create_entity();
+    const poko::ecs::Registry& view = registry;
+    POKO_CHECK(!view.has_component<Position>(e));
+    POKO_CHECK(view.get_component<Position>(e) == nullptr);
+    registry.add_component(e, Position{1.0f, 2.0f});
+    POKO_CHECK(view.get_component<Position>(e) != nullptr);
+}
+
 POKO_TEST_MAIN()

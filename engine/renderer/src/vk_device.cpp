@@ -305,7 +305,7 @@ Status VulkanRenderDevice::recover_from_device_loss() {
     if (!lost_) {
         return Status::fail(ErrorCode::FailedPrecondition, "device is not lost");
     }
-    lost_ = false;
+    // Stays lost: recovery would need a full device rebuild.
     return Status::fail(ErrorCode::Unimplemented, "Vulkan device-loss recovery not implemented");
 }
 
