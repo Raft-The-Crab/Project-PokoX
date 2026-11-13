@@ -7,6 +7,7 @@
 #include <numeric>
 
 #include "joint_rows.h"
+#include "gjk.h"
 #include "narrowphase.h"
 
 namespace poko {
@@ -27,6 +28,7 @@ constexpr float kMatchDistance = 0.05f;
 constexpr float kRestDamping = 4.0f;
 constexpr float kRestDampSpeed = 0.5f;
 constexpr float kCcdPenetration = 0.002f;
+constexpr float kCcdTolerance = 0.001f;
 
 struct Constraint {
     int a = -1;
@@ -61,7 +63,7 @@ Vec3 perpendicular(const Vec3& n) noexcept {
 
 
 // Radius of the largest sphere that fits inside the shape: the thickness the
-// swept centre must stay clear of.
+// body must be moving relative to before CCD matters.
 float inner_radius(const ShapeDesc& shape) noexcept {
     switch (shape.kind) {
     case ShapeKind::Sphere:
@@ -73,12 +75,6 @@ float inner_radius(const ShapeDesc& shape) noexcept {
     return shape.radius;
 }
 
-// Target shape grown by `r`; a ray against it approximates a sphere cast.
-ShapeDesc inflate(ShapeDesc shape, float r) noexcept {
-    shape.radius += r;
-    shape.half_extents = {shape.half_extents.x + r, shape.half_extents.y + r, shape.half_extents.z + r};
-    return shape;
-}
 } // namespace
 
 void CustomPhysicsWorld::substep(float h) {
@@ -416,16 +412,36 @@ void CustomPhysicsWorld::substep(float h) {
         contact_cache_[c.key].push_back({c.point, c.jn, c.t1 * c.jt1 + c.t2 * c.jt2});
     }
 
-    // 6b. Continuous collision detection. Sweep each fast body's centre along
-    // its relative motion against every other body inflated by the mover's inner
-    // radius; stop just inside first contact and let the solver resolve it.
+    // 6b. Continuous collision detection. Bodies whose surfaces move far
+    // relative to their thickness are advanced to the exact time of impact
+    // (GJK distance + conservative advancement, rotation included) against each
+    // candidate whose swept bounds overlap. The body then moves only that
+    // fraction of the step; the next step's contact solver resolves the touch.
+    std::vector<float> motion_scale(count, 1.0f);
     if (ccd_enabled_) {
+        struct Swept {
+            Vec3 half;
+            float reach; // how far any point can move this step
+        };
+        std::vector<Swept> swept(count);
+        std::vector<std::size_t> fast;
         for (std::size_t i = 0; i < count; ++i) {
             const Body& body = bodies_[i];
-            if (!body.alive || !awake_dynamic(body)) continue;
-            const float inner = inner_radius(body.shape);
-            const Vec3 vi = body.state.velocity;
-            float best = 1.0f;
+            if (!body.alive) continue;
+            const bool moves = body.type == BodyType::Kinematic || awake_dynamic(body);
+            const float reach = moves ? (math::length(body.state.velocity) +
+                                         math::length(body.state.angular_velocity) *
+                                             bounding_radius(body.shape)) * h
+                                      : 0.0f;
+            swept[i] = {aabb_half_extents(body.shape, body.state.rotation), reach};
+            if (awake_dynamic(body) && reach >= 0.5f * inner_radius(body.shape)) fast.push_back(i);
+        }
+        for (const std::size_t i : fast) {
+            const Body& body = bodies_[i];
+            const Motion ma{body.state.position, body.state.rotation, body.state.velocity,
+                            body.state.angular_velocity};
+            float earliest = h;
+            float stop = h;
             for (std::size_t j = 0; j < count; ++j) {
                 if (j == i || !bodies_[j].alive) continue;
                 const Body& other = bodies_[j];
@@ -436,21 +452,30 @@ void CustomPhysicsWorld::substep(float h) {
                 const auto lo = static_cast<std::uint64_t>(std::min(i, j));
                 const auto hi = static_cast<std::uint64_t>(std::max(i, j));
                 if (std::binary_search(joined.begin(), joined.end(), lo << 32 | hi)) continue;
-                const bool other_moves = other.type == BodyType::Kinematic || awake_dynamic(other);
-                const Vec3 relative = vi - (other_moves ? other.state.velocity : Vec3{});
-                const float travel = math::length(relative) * h;
-                if (travel < 0.5f * inner) continue;
-                float t = 0.0f;
-                Vec3 normal{};
-                if (!ray_shape(body.state.position, relative / (travel / h), inflate(other.shape, inner),
-                               Pose{other.state.position, other.state.rotation}, travel, t, normal) ||
-                    t < 1.0e-4f) {
-                    continue; // miss, or already overlapping: the contact solver owns that
+                const Vec3 gap = other.state.position - body.state.position;
+                const float margin = swept[i].reach + swept[j].reach;
+                if (std::abs(gap.x) > swept[i].half.x + swept[j].half.x + margin ||
+                    std::abs(gap.y) > swept[i].half.y + swept[j].half.y + margin ||
+                    std::abs(gap.z) > swept[i].half.z + swept[j].half.z + margin) {
+                    continue;
                 }
-                best = std::min(best, std::min(1.0f, (t + kCcdPenetration) / travel));
+                const bool other_moves = other.type == BodyType::Kinematic || awake_dynamic(other);
+                Motion mb{other.state.position, other.state.rotation, Vec3{}, Vec3{}};
+                if (other_moves) {
+                    mb.velocity = other.state.velocity;
+                    mb.spin = other.state.angular_velocity;
+                }
+                ImpactResult hit;
+                if (!time_of_impact(body.shape, ma, other.shape, mb, earliest, kCcdTolerance, hit)) {
+                    continue;
+                }
+                // Stop kCcdPenetration inside contact so a real contact exists next step.
+                const float push = kCcdPenetration / std::max(hit.closing, 1.0e-3f);
+                earliest = std::min(earliest, hit.time);
+                stop = std::min(stop, std::min(h, hit.time + push));
             }
-            if (best < 1.0f) {
-                shift[i] = shift[i] - vi * (h * (1.0f - best));
+            if (stop < h) {
+                motion_scale[i] = stop / h;
                 ++ccd_hits_;
             }
         }
@@ -461,11 +486,12 @@ void CustomPhysicsWorld::substep(float h) {
         Body& body = bodies_[i];
         if (!body.alive || !awake_dynamic(body)) continue;
         BodyState& s = body.state;
-        s.position = s.position + s.velocity * h + shift[i];
+        s.position = s.position + s.velocity * (h * motion_scale[i]) + shift[i];
         const float spin = math::length(s.angular_velocity);
         if (spin > 1.0e-5f) {
             s.rotation = math::multiply(
-                math::quat_from_axis_angle(s.angular_velocity / spin, spin * h), s.rotation);
+                math::quat_from_axis_angle(s.angular_velocity / spin, spin * h * motion_scale[i]),
+                s.rotation);
         }
     }
 

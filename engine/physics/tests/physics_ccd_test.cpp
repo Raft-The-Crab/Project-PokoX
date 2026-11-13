@@ -150,4 +150,61 @@ POKO_TEST(ccd_ignores_resting_and_sliding_bodies_and_respects_layers_and_joints)
     POKO_CHECK_EQ(w->ccd_hit_count(), 0u);
 }
 
+POKO_TEST(spinning_bar_is_stopped_by_a_post_in_its_rotation_sweep) {
+    for (const bool ccd : {false, true}) {
+        World w(ccd);
+        // The bar turns one radian per step, so its discrete poses (0, 1, 2 rad)
+        // all miss a thin post sitting at 0.5 rad.
+        w.wall({0.8f * std::cos(0.5f), 0.8f * std::sin(0.5f), 0}, {0.03f, 0.03f, 0.3f});
+        BodyDesc bar;
+        bar.shape.kind = ShapeKind::Box;
+        bar.shape.half_extents = {1.0f, 0.02f, 0.02f};
+        bar.angular_velocity = {0, 0, 60.0f};
+        const auto h = w->create_body(bar).value();
+        float max_angle = 0.0f;
+        for (int i = 0; i < 3; ++i) {
+            w->step(1.0f / 60.0f);
+            const auto q = w->get_body_state(h).value().rotation;
+            max_angle = std::max(max_angle, 2.0f * std::atan2(q.z, q.w));
+        }
+        if (ccd) {
+            POKO_CHECK(w->get_body_state(h).value().angular_velocity.z < 55.0f); // it struck the post and lost spin
+            POKO_CHECK(w->ccd_hit_count() > 0u);
+        } else {
+            POKO_CHECK(max_angle > 0.9f);                       // spun straight through it
+            POKO_CHECK(std::abs(w->get_body_state(h).value().angular_velocity.z - 60.0f) < 1.0f); // only light damping
+        }
+    }
+}
+
+POKO_TEST(ccd_uses_the_exact_rounded_corner_not_an_inflated_box) {
+    // A 20 cm thick static box between the sphere's 5 m step positions.
+    for (const bool graze : {false, true}) {
+        World w;
+        w.wall({0, 0, -2.5f}, {1.0f, 1.0f, 0.1f});
+        // 0.113 from the box edge clears a 0.1 sphere; 0.071 does not.
+        const float offset = graze ? 1.08f : 1.05f;
+        const auto b = w.projectile(ShapeKind::Sphere, {offset, offset, 0}, {0, 0, -300}, 0.1f);
+        w.run(0.2f);
+        if (graze) {
+            POKO_CHECK(w.pos(b).z < -3.0f);      // passes the corner untouched
+            POKO_CHECK(std::abs(w->get_body_state(b).value().velocity.z + 300.0f) < 3.0f); // only light damping
+            POKO_CHECK_EQ(w->ccd_hit_count(), 0u);
+        } else {
+            const auto v = w->get_body_state(b).value().velocity;
+            POKO_CHECK(w->ccd_hit_count() > 0u);                          // the edge was detected
+            POKO_CHECK(std::hypot(v.x, v.y) > 10.0f);                      // and it deflected the sphere
+        }
+    }
+}
+
+POKO_TEST(ccd_stops_within_a_few_millimetres_of_the_surface) {
+    World w;
+    w.wall({0, 0, -7.5f}, {5, 5, 0.025f}); // front face at z = -7.475
+    const auto b = w.projectile(ShapeKind::Sphere, {0, 0, 0}, {0, 0, -300}, 0.05f);
+    for (int i = 0; i < 3; ++i) w->step(1.0f / 60.0f);
+    // Sphere surface touches the face when the centre is at -7.425.
+    POKO_CHECK(std::abs(w.pos(b).z - (-7.425f)) < 0.02f);
+}
+
 POKO_TEST_MAIN()

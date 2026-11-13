@@ -35,12 +35,17 @@ substep (at most 8 per `step`):
 
 Raycasts are exact against oriented spheres, boxes and capsules.
 
-Continuous collision detection (on by default, `set_ccd_enabled`) sweeps any body
-moving more than half its inner radius per step against every other body
-(targets inflated by the mover's inner radius) and stops it just inside first
-contact, so the regular solver resolves the hit, restitution included. Rotation
-is not swept, and ground-plane tunnelling cannot occur because it is a half-space.
-`ccd_hit_count()` reports activations.
+Continuous collision detection (on by default, `set_ccd_enabled`): a body whose
+surface moves more than half its inner radius per step (linear speed plus spin
+* bounding radius) is advanced to the exact time of impact against every
+other body whose swept bounds overlap its own. The test is shape against shape
+(GJK distance on sphere/capsule/box cores plus conservative advancement), so
+rotation of both bodies is included and corners and edges are exact, with no
+inflated-box approximation. The body moves only that fraction of the step and
+stops about 2 mm inside contact, so the regular solver resolves the hit,
+restitution included. Only fast bodies are tested, each after a cheap swept-AABB
+reject. `ccd_hit_count()` reports activations. The ground plane needs no CCD
+because it is a half-space.
 
 Rest damping removes residual sway from slow touching bodies, so tall stacks
 settle and sleep. Joints are created with `create_joint` (world-space anchor and

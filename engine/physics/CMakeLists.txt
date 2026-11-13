@@ -23,7 +23,8 @@ add_library(poko_physics_custom STATIC
     src/custom_step.cpp
     src/custom_raycast.cpp
     src/narrowphase.cpp
-    src/custom_joints.cpp)
+    src/custom_joints.cpp
+    src/gjk.cpp)
 
 target_include_directories(poko_physics_custom PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
