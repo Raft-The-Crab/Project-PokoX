@@ -13,9 +13,9 @@ namespace poko {
 // angular integration, a static ground plane, impulse-based collision response
 // with restitution/friction, layer/mask filtering, and analytic raycasts.
 //
-// Narrow phase uses conservative bounding spheres (box = circumscribed sphere,
-// capsule = radius + half_height); exact polyhedral contact is future work.
-// Raycasts are analytic against sphere, AABB and capsule bounds.
+// Exact narrow phase for sphere, capsule and oriented box (SAT + face clipping
+// for boxes), sweep-and-prune broadphase, sequential-impulse solver with
+// friction, and island sleeping. Raycasts are exact against oriented shapes.
 //
 // Thread-safety contract: synchronised; any thread may call any method.
 class CustomPhysicsWorld final : public api::IPhysicsWorld {
@@ -38,6 +38,13 @@ public:
     std::uint32_t contact_count() const noexcept;
     std::uint32_t substep_count() const noexcept;
 
+    // Sleeping: an island of dynamic bodies at rest for `sleep_time` seconds
+    // stops simulating until touched by a moving body or modified.
+    void set_sleep_enabled(bool enabled) noexcept;
+    bool is_sleeping(BodyHandle body) const noexcept;
+    Status wake(BodyHandle body);
+    std::uint32_t sleeping_body_count() const noexcept;
+
 private:
     struct Body {
         bool alive = false;
@@ -45,24 +52,26 @@ private:
         ShapeDesc shape{};
         BodyState state{};
         float mass = 1.0f;
+        math::Vec3 inv_inertia{}; // diagonal of the inverse local inertia tensor
         float friction = 0.5f;
         float restitution = 0.0f;
         std::uint32_t collision_layer = 1;
         std::uint32_t collision_mask = 0xFFFFFFFFu;
+        bool sleeping = false;
+        float sleep_timer = 0.0f;
     };
 
     bool handle_live(BodyHandle handle) const noexcept; // caller holds mutex_
     Body* find(BodyHandle handle) noexcept;             // caller holds mutex_
     const Body* find(BodyHandle handle) const noexcept; // caller holds mutex_
     void substep(float h);                              // caller holds mutex_
-    void resolve_ground();                              // caller holds mutex_
-    void resolve_contacts();                            // caller holds mutex_
 
     mutable std::mutex mutex_;
     bool initialized_ = false;
     PhysicsWorldDesc desc_{};
     bool ground_enabled_ = true;
     float ground_height_ = 0.0f;
+    bool sleep_enabled_ = true;
     float accumulator_ = 0.0f;
     std::uint32_t contacts_ = 0;
     std::uint32_t substeps_ = 0;

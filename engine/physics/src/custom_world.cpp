@@ -5,6 +5,43 @@
 
 namespace poko {
 
+namespace {
+
+// Diagonal of the inverse local inertia tensor for a solid shape of `mass`.
+math::Vec3 inverse_inertia(const ShapeDesc& shape, float mass) noexcept {
+    float ix = 0.0f;
+    float iy = 0.0f;
+    float iz = 0.0f;
+    switch (shape.kind) {
+    case ShapeKind::Sphere:
+        ix = iy = iz = 0.4f * mass * shape.radius * shape.radius;
+        break;
+    case ShapeKind::Box: {
+        const math::Vec3& h = shape.half_extents;
+        ix = mass / 3.0f * (h.y * h.y + h.z * h.z);
+        iy = mass / 3.0f * (h.x * h.x + h.z * h.z);
+        iz = mass / 3.0f * (h.x * h.x + h.y * h.y);
+        break;
+    }
+    case ShapeKind::Capsule: {
+        const float r = shape.radius;
+        const float height = 2.0f * shape.half_height;
+        const float cylinder = r * r * height;
+        const float sphere = 4.0f / 3.0f * r * r * r;
+        const float mc = mass * cylinder / (cylinder + sphere);
+        const float ms = mass - mc;
+        iy = mc * r * r * 0.5f + ms * 0.4f * r * r;
+        ix = iz = mc * (r * r / 4.0f + height * height / 12.0f) +
+                  ms * (0.4f * r * r + height * height / 4.0f + 0.375f * height * r);
+        break;
+    }
+    }
+    const auto inv = [](float v) { return v > 1.0e-9f ? 1.0f / v : 0.0f; };
+    return {inv(ix), inv(iy), inv(iz)};
+}
+
+} // namespace
+
 bool CustomPhysicsWorld::initialize(const PhysicsWorldDesc& desc) noexcept {
     std::lock_guard<std::mutex> guard(mutex_);
     if (initialized_) {
@@ -66,6 +103,7 @@ Result<BodyHandle> CustomPhysicsWorld::create_body(const BodyDesc& desc) {
     body.shape = desc.shape;
     body.state = BodyState{desc.position, desc.rotation, desc.velocity, desc.angular_velocity};
     body.mass = desc.type == BodyType::Static ? 0.0f : desc.mass;
+    body.inv_inertia = desc.type == BodyType::Dynamic ? inverse_inertia(desc.shape, desc.mass) : math::Vec3{};
     body.friction = desc.friction;
     body.restitution = desc.restitution;
     body.collision_layer = desc.collision_layer;
@@ -93,6 +131,8 @@ Status CustomPhysicsWorld::set_body_state(BodyHandle body, const BodyState& stat
         return Status::fail(ErrorCode::NotFound, "body handle is not live");
     }
     bodies_[body.index].state = state;
+    bodies_[body.index].sleeping = false;
+    bodies_[body.index].sleep_timer = 0.0f;
     return Status::success();
 }
 
@@ -135,6 +175,43 @@ std::uint32_t CustomPhysicsWorld::contact_count() const noexcept {
 std::uint32_t CustomPhysicsWorld::substep_count() const noexcept {
     std::lock_guard<std::mutex> guard(mutex_);
     return substeps_;
+}
+
+void CustomPhysicsWorld::set_sleep_enabled(bool enabled) noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    sleep_enabled_ = enabled;
+    if (!enabled) {
+        for (auto& body : bodies_) {
+            body.sleeping = false;
+            body.sleep_timer = 0.0f;
+        }
+    }
+}
+
+bool CustomPhysicsWorld::is_sleeping(BodyHandle body) const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return handle_live(body) && bodies_[body.index].sleeping;
+}
+
+Status CustomPhysicsWorld::wake(BodyHandle body) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (!handle_live(body)) {
+        return Status::fail(ErrorCode::NotFound, "body handle is not live");
+    }
+    bodies_[body.index].sleeping = false;
+    bodies_[body.index].sleep_timer = 0.0f;
+    return Status::success();
+}
+
+std::uint32_t CustomPhysicsWorld::sleeping_body_count() const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    std::uint32_t count = 0;
+    for (const auto& body : bodies_) {
+        if (body.alive && body.sleeping) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 } // namespace poko

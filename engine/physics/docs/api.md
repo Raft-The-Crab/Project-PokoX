@@ -9,17 +9,32 @@ separate targets so a MOCK can never be confused with production
   analytic raycasts, no collision response.
 - `poko_physics_custom` — **PRODUCTION** `CustomPhysicsWorld`, header
   `include/poko/physics/custom_world.h`. Confirmed by systemplan/29
-  ("custom physics"). Deterministic fixed-substep simulation using only the
-  C++20 standard library.
+  ("custom physics"). Deterministic fixed-substep simulation, C++20 standard
+  library only.
 
-`CustomPhysicsWorld` runs `PhysicsWorldDesc::fixed_delta_seconds` substeps
-(capped at 8 per `step`), integrates linear + angular state, resolves a static
-ground plane at y = 0 (configurable via `set_ground`), and applies impulse-based
-collision response with restitution/friction and layer/mask filtering. The
-narrow phase uses conservative bounding spheres (box = circumscribed sphere,
-capsule = radius + half_height); exact polyhedral contact and sleeping are
-future work. Raycasts are analytic against sphere, AABB and capsule bounds.
-`contact_count()` / `substep_count()` expose deterministic introspection.
+`CustomPhysicsWorld` pipeline per `PhysicsWorldDesc::fixed_delta_seconds`
+substep (at most 8 per `step`):
 
-Public headers live under `include/poko/physics/`; sources under `src/`
-(`custom_detail.h` holds shared `detail::` helpers); tests under `tests/`.
+1. Gravity and light damping for awake dynamic bodies.
+2. Sweep-and-prune broadphase (x sort, y/z overlap), layer/mask filtering,
+   deterministic pair ordering.
+3. Exact narrow phase (`src/narrowphase.*`) for sphere, capsule (local Y axis)
+   and oriented box: SAT with face clipping and edge-edge contacts for
+   box-box, multi-point manifolds for capsules and boxes, plus a ground plane
+   (`set_ground`) giving per-vertex box contacts.
+4. Linear position correction (slop 5 mm, tracked per body so manifolds are
+   not over-corrected), then 12 sequential-impulse iterations with angular
+   terms (per-shape inertia tensors), two-tangent Coulomb friction and
+   restitution above a 1 m/s threshold.
+5. Island sleeping: a connected group of dynamic bodies under 5 cm/s for
+   0.5 s sleeps; contact with a moving body, `wake()` or `set_body_state()`
+   wakes it. Introspection: `is_sleeping`, `sleeping_body_count`,
+   `contact_count`, `substep_count`.
+
+Raycasts are exact against oriented spheres, boxes and capsules.
+
+**Not yet done:** joints/constraints, continuous collision detection for fast
+small bodies, warm starting, triangle-mesh/convex-hull shapes, triggers.
+
+Public headers live under `include/poko/physics/`; sources under `src/`;
+tests under `tests/`.

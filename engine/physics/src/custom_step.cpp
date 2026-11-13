@@ -3,137 +3,315 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <numeric>
 
-#include "custom_detail.h"
+#include "narrowphase.h"
 
 namespace poko {
+namespace {
 
-void CustomPhysicsWorld::resolve_ground() {
-    for (auto& body : bodies_) {
-        if (!body.alive || body.type != BodyType::Dynamic) {
-            continue;
-        }
-        const float radius = physics::detail::bounding_radius(body.shape);
-        const float floor = ground_height_ + radius;
-        BodyState& state = body.state;
-        if (state.position.y >= floor) {
-            continue;
-        }
-        state.position.y = floor;
-        if (state.velocity.y < 0.0f) {
-            state.velocity.y = -state.velocity.y * body.restitution;
-        }
-        // Simple Coulomb-style ground damping on the tangent plane.
-        const float damp = std::max(0.0f, 1.0f - body.friction * 4.0f * desc_.fixed_delta_seconds);
-        state.velocity.x *= damp;
-        state.velocity.z *= damp;
-        ++contacts_;
-    }
+using math::Vec3;
+
+constexpr int kVelocityIterations = 12;
+constexpr int kPositionIterations = 4;
+constexpr float kSlop = 0.005f;
+constexpr float kCorrection = 0.8f;
+constexpr float kRestitutionThreshold = 1.0f;
+constexpr float kLinearDamping = 0.02f;
+constexpr float kAngularDamping = 0.1f;
+constexpr float kRestSpeed = 0.05f;
+constexpr float kSleepTime = 0.5f;
+
+struct Constraint {
+    int a = -1;
+    int b = -1; // -1: immovable ground
+    Vec3 n{};
+    Vec3 ra{};
+    Vec3 rb{};
+    Vec3 t1{};
+    Vec3 t2{};
+    float depth = 0.0f;
+    float mass_n = 0.0f;
+    float mass_t1 = 0.0f;
+    float mass_t2 = 0.0f;
+    float bounce = 0.0f;
+    float mu = 0.0f;
+    float jn = 0.0f;
+    float jt1 = 0.0f;
+    float jt2 = 0.0f;
+};
+
+struct Pair {
+    int a;
+    int b;
+};
+
+Vec3 perpendicular(const Vec3& n) noexcept {
+    const Vec3 helper = std::abs(n.x) < 0.57f ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
+    return math::normalize(math::cross(n, helper));
 }
 
-void CustomPhysicsWorld::resolve_contacts() {
-    for (std::size_t i = 0; i < bodies_.size(); ++i) {
-        if (!bodies_[i].alive) {
-            continue;
-        }
-        for (std::size_t j = i + 1; j < bodies_.size(); ++j) {
-            if (!bodies_[j].alive) {
-                continue;
-            }
-            Body& a = bodies_[i];
-            Body& b = bodies_[j];
-            // At least one participant must be dynamic.
-            if (a.type != BodyType::Dynamic && b.type != BodyType::Dynamic) {
-                continue;
-            }
-            if ((a.collision_layer & b.collision_mask) == 0 ||
-                (b.collision_layer & a.collision_mask) == 0) {
-                continue;
-            }
-            physics::detail::Contact contact;
-            if (!physics::detail::overlap(a.state.position, physics::detail::bounding_radius(a.shape),
-                                 b.state.position, physics::detail::bounding_radius(b.shape), contact)) {
-                continue;
-            }
-            ++contacts_;
-
-            const float inv_a =
-                (a.type == BodyType::Dynamic && a.mass > 0.0f) ? 1.0f / a.mass : 0.0f;
-            const float inv_b =
-                (b.type == BodyType::Dynamic && b.mass > 0.0f) ? 1.0f / b.mass : 0.0f;
-            const float inv_sum = inv_a + inv_b;
-            if (inv_sum <= 0.0f) {
-                continue;
-            }
-
-            // Positional correction split by inverse mass.
-            const float correction = contact.penetration / inv_sum;
-            if (inv_a > 0.0f) {
-                a.state.position = a.state.position - contact.normal * (correction * inv_a);
-            }
-            if (inv_b > 0.0f) {
-                b.state.position = b.state.position + contact.normal * (correction * inv_b);
-            }
-
-            const math::Vec3 relative = b.state.velocity - a.state.velocity;
-            const float normal_speed = math::dot(relative, contact.normal);
-            if (normal_speed >= 0.0f) {
-                continue; // separating
-            }
-            const float restitution = std::min(a.restitution, b.restitution);
-            const float impulse_magnitude = -(1.0f + restitution) * normal_speed / inv_sum;
-            const math::Vec3 impulse = contact.normal * impulse_magnitude;
-            if (inv_a > 0.0f) {
-                a.state.velocity = a.state.velocity - impulse * inv_a;
-            }
-            if (inv_b > 0.0f) {
-                b.state.velocity = b.state.velocity + impulse * inv_b;
-            }
-
-            // Tangential friction impulse, clamped to the Coulomb cone.
-            const math::Vec3 tangent = relative - contact.normal * normal_speed;
-            const float tangent_length = math::length(tangent);
-            if (tangent_length <= 1.0e-5f) {
-                continue;
-            }
-            const math::Vec3 tangent_dir = tangent / tangent_length;
-            float friction_impulse = -math::dot(relative, tangent_dir) / inv_sum;
-            const float mu = std::sqrt(a.friction * b.friction);
-            friction_impulse =
-                math::clamp(friction_impulse, -impulse_magnitude * mu, impulse_magnitude * mu);
-            const math::Vec3 friction_vec = tangent_dir * friction_impulse;
-            if (inv_a > 0.0f) {
-                a.state.velocity = a.state.velocity - friction_vec * inv_a;
-            }
-            if (inv_b > 0.0f) {
-                b.state.velocity = b.state.velocity + friction_vec * inv_b;
-            }
-        }
-    }
-}
+} // namespace
 
 void CustomPhysicsWorld::substep(float h) {
-    // Semi-implicit Euler for dynamics; angular velocity integrated as a
-    // rotation quaternion about its own axis.
+    using namespace physics::detail;
+    const std::size_t count = bodies_.size();
+
+    // 1. Integrate velocities of awake dynamic bodies.
     for (auto& body : bodies_) {
-        if (!body.alive || body.type != BodyType::Dynamic) {
+        if (!body.alive || body.type != BodyType::Dynamic || body.sleeping) {
             continue;
         }
-        BodyState& state = body.state;
-        state.velocity = state.velocity + desc_.gravity * h;
-        state.position = state.position + state.velocity * h;
-        const float spin = math::length(state.angular_velocity);
-        if (spin > 1.0e-5f) {
-            const math::Vec3 axis = state.angular_velocity / spin;
-            state.rotation =
-                math::multiply(math::quat_from_axis_angle(axis, spin * h), state.rotation);
+        BodyState& s = body.state;
+        s.velocity = (s.velocity + desc_.gravity * h) * (1.0f / (1.0f + kLinearDamping * h));
+        s.angular_velocity = s.angular_velocity * (1.0f / (1.0f + kAngularDamping * h));
+    }
+
+    // 2. Broadphase: sweep and prune on x, then y/z overlap and filters.
+    struct Entry {
+        Vec3 lo;
+        Vec3 hi;
+        int index;
+    };
+    std::vector<Entry> entries;
+    entries.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        const Body& body = bodies_[i];
+        if (!body.alive) continue;
+        const Vec3 half = aabb_half_extents(body.shape, body.state.rotation);
+        entries.push_back({body.state.position - half, body.state.position + half, static_cast<int>(i)});
+    }
+    std::sort(entries.begin(), entries.end(), [](const Entry& l, const Entry& r) {
+        return l.lo.x != r.lo.x ? l.lo.x < r.lo.x : l.index < r.index;
+    });
+    const auto awake_dynamic = [&](const Body& b) {
+        return b.type == BodyType::Dynamic && !b.sleeping;
+    };
+    std::vector<Pair> pairs;
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        for (std::size_t j = i + 1; j < entries.size() && entries[j].lo.x <= entries[i].hi.x; ++j) {
+            const Entry& e = entries[i];
+            const Entry& f = entries[j];
+            if (e.lo.y > f.hi.y || f.lo.y > e.hi.y || e.lo.z > f.hi.z || f.lo.z > e.hi.z) continue;
+            const int lo = std::min(e.index, f.index);
+            const int hi = std::max(e.index, f.index);
+            const Body& ba = bodies_[static_cast<std::size_t>(lo)];
+            const Body& bb = bodies_[static_cast<std::size_t>(hi)];
+            if (!awake_dynamic(ba) && !awake_dynamic(bb)) continue;
+            if ((ba.collision_layer & bb.collision_mask) == 0 ||
+                (bb.collision_layer & ba.collision_mask) == 0) {
+                continue;
+            }
+            pairs.push_back({lo, hi});
+        }
+    }
+    std::sort(pairs.begin(), pairs.end(), [](const Pair& l, const Pair& r) {
+        return l.a != r.a ? l.a < r.a : l.b < r.b;
+    });
+
+    // 3. Wake sleepers touched by something that is moving.
+    const auto moving = [&](const Body& b) {
+        if (b.type == BodyType::Kinematic) {
+            return math::length_squared(b.state.velocity) > 1.0e-6f ||
+                   math::length_squared(b.state.angular_velocity) > 1.0e-6f;
+        }
+        return awake_dynamic(b) && b.sleep_timer == 0.0f;
+    };
+    for (const Pair& p : pairs) {
+        Body& ba = bodies_[static_cast<std::size_t>(p.a)];
+        Body& bb = bodies_[static_cast<std::size_t>(p.b)];
+        if (ba.sleeping && moving(bb)) {
+            ba.sleeping = false;
+            ba.sleep_timer = 0.0f;
+        } else if (bb.sleeping && moving(ba)) {
+            bb.sleeping = false;
+            bb.sleep_timer = 0.0f;
         }
     }
 
-    if (ground_enabled_) {
-        resolve_ground();
+    std::vector<float> inv_m(count, 0.0f);
+    for (std::size_t i = 0; i < count; ++i) {
+        const Body& body = bodies_[i];
+        if (body.alive && awake_dynamic(body) && body.mass > 0.0f) inv_m[i] = 1.0f / body.mass;
     }
-    resolve_contacts();
+    const auto inv_inertia_mul = [&](int i, const Vec3& v) {
+        const Body& body = bodies_[static_cast<std::size_t>(i)];
+        if (inv_m[static_cast<std::size_t>(i)] == 0.0f) return Vec3{};
+        const Vec3 local = math::rotate(math::conjugate(body.state.rotation), v);
+        return math::rotate(body.state.rotation,
+                            Vec3{local.x * body.inv_inertia.x, local.y * body.inv_inertia.y,
+                                 local.z * body.inv_inertia.z});
+    };
+
+    // 4. Narrow phase and constraint construction.
+    std::vector<Constraint> constraints;
+    const auto add_constraints = [&](int a, int b, const Manifold& m, float mu, float e) {
+        for (int k = 0; k < m.count; ++k) {
+            const ContactPoint& cp = m.points[k];
+            Constraint c;
+            c.a = a;
+            c.b = b;
+            c.n = cp.normal;
+            c.depth = cp.depth;
+            c.ra = cp.point - bodies_[static_cast<std::size_t>(a)].state.position;
+            c.rb = b >= 0 ? cp.point - bodies_[static_cast<std::size_t>(b)].state.position : Vec3{};
+            c.t1 = perpendicular(c.n);
+            c.t2 = math::cross(c.n, c.t1);
+            c.mu = mu;
+            c.bounce = e; // resolved to a target speed in the pre-step
+            constraints.push_back(c);
+        }
+        contacts_ += static_cast<std::uint32_t>(m.count);
+    };
+    for (const Pair& p : pairs) {
+        const Body& ba = bodies_[static_cast<std::size_t>(p.a)];
+        const Body& bb = bodies_[static_cast<std::size_t>(p.b)];
+        Manifold m;
+        if (!collide(ba.shape, Pose{ba.state.position, ba.state.rotation}, bb.shape,
+                     Pose{bb.state.position, bb.state.rotation}, m)) {
+            continue;
+        }
+        add_constraints(p.a, p.b, m, std::sqrt(ba.friction * bb.friction),
+                        std::min(ba.restitution, bb.restitution));
+    }
+    if (ground_enabled_) {
+        for (std::size_t i = 0; i < count; ++i) {
+            const Body& body = bodies_[i];
+            if (!body.alive || !awake_dynamic(body)) continue;
+            Manifold m;
+            if (collide_ground(body.shape, Pose{body.state.position, body.state.rotation},
+                               ground_height_, m)) {
+                add_constraints(static_cast<int>(i), -1, m, std::sqrt(body.friction),
+                                body.restitution);
+            }
+        }
+    }
+
+    // 5. Position correction: linear, mass-weighted, tracking per-body
+    // displacement so multi-point manifolds are not corrected repeatedly.
+    std::vector<Vec3> shift(count);
+    for (int iter = 0; iter < kPositionIterations; ++iter) {
+        for (const Constraint& c : constraints) {
+            const auto ia = inv_m[static_cast<std::size_t>(c.a)];
+            const auto ib = c.b >= 0 ? inv_m[static_cast<std::size_t>(c.b)] : 0.0f;
+            if (ia + ib <= 0.0f) continue;
+            const Vec3 sb = c.b >= 0 ? shift[static_cast<std::size_t>(c.b)] : Vec3{};
+            const float depth = c.depth - math::dot(sb - shift[static_cast<std::size_t>(c.a)], c.n);
+            const float corr = std::max(0.0f, depth - kSlop) * kCorrection / (ia + ib);
+            shift[static_cast<std::size_t>(c.a)] = shift[static_cast<std::size_t>(c.a)] - c.n * (corr * ia);
+            if (c.b >= 0) shift[static_cast<std::size_t>(c.b)] = shift[static_cast<std::size_t>(c.b)] + c.n * (corr * ib);
+        }
+    }
+
+    // 6. Velocity solve (sequential impulses).
+    const auto velocity_at = [&](int i, const Vec3& r) {
+        if (i < 0) return Vec3{};
+        const BodyState& s = bodies_[static_cast<std::size_t>(i)].state;
+        return s.velocity + math::cross(s.angular_velocity, r);
+    };
+    const auto apply = [&](const Constraint& c, const Vec3& impulse) {
+        const auto ia = inv_m[static_cast<std::size_t>(c.a)];
+        BodyState& sa = bodies_[static_cast<std::size_t>(c.a)].state;
+        sa.velocity = sa.velocity - impulse * ia;
+        sa.angular_velocity = sa.angular_velocity - inv_inertia_mul(c.a, math::cross(c.ra, impulse));
+        if (c.b >= 0) {
+            const auto ib = inv_m[static_cast<std::size_t>(c.b)];
+            BodyState& sb = bodies_[static_cast<std::size_t>(c.b)].state;
+            sb.velocity = sb.velocity + impulse * ib;
+            sb.angular_velocity = sb.angular_velocity + inv_inertia_mul(c.b, math::cross(c.rb, impulse));
+        }
+    };
+    const auto effective_mass = [&](const Constraint& c, const Vec3& dir) {
+        const auto ia = inv_m[static_cast<std::size_t>(c.a)];
+        const Vec3 ra_n = math::cross(c.ra, dir);
+        float k = ia + math::dot(math::cross(inv_inertia_mul(c.a, ra_n), c.ra), dir);
+        if (c.b >= 0) {
+            const auto ib = inv_m[static_cast<std::size_t>(c.b)];
+            const Vec3 rb_n = math::cross(c.rb, dir);
+            k += ib + math::dot(math::cross(inv_inertia_mul(c.b, rb_n), c.rb), dir);
+        }
+        return k > 1.0e-9f ? 1.0f / k : 0.0f;
+    };
+    for (Constraint& c : constraints) {
+        c.mass_n = effective_mass(c, c.n);
+        c.mass_t1 = effective_mass(c, c.t1);
+        c.mass_t2 = effective_mass(c, c.t2);
+        const float vn = math::dot(velocity_at(c.b, c.rb) - velocity_at(c.a, c.ra), c.n);
+        c.bounce = vn < -kRestitutionThreshold ? -c.bounce * vn : 0.0f;
+    }
+    for (int iter = 0; iter < kVelocityIterations; ++iter) {
+        for (Constraint& c : constraints) {
+            const Vec3 rel = velocity_at(c.b, c.rb) - velocity_at(c.a, c.ra);
+            // Friction, bounded by the Coulomb cone of the current normal impulse.
+            const float limit = c.mu * c.jn;
+            const float d1 = -math::dot(rel, c.t1) * c.mass_t1;
+            const float old1 = c.jt1;
+            c.jt1 = math::clamp(old1 + d1, -limit, limit);
+            const float d2 = -math::dot(rel, c.t2) * c.mass_t2;
+            const float old2 = c.jt2;
+            c.jt2 = math::clamp(old2 + d2, -limit, limit);
+            apply(c, c.t1 * (c.jt1 - old1) + c.t2 * (c.jt2 - old2));
+
+            const Vec3 rel_n = velocity_at(c.b, c.rb) - velocity_at(c.a, c.ra);
+            const float vn = math::dot(rel_n, c.n);
+            const float dn = (c.bounce - vn) * c.mass_n;
+            const float old = c.jn;
+            c.jn = std::max(0.0f, old + dn);
+            apply(c, c.n * (c.jn - old));
+        }
+    }
+
+    // 7. Integrate positions and orientation.
+    for (std::size_t i = 0; i < count; ++i) {
+        Body& body = bodies_[i];
+        if (!body.alive || !awake_dynamic(body)) continue;
+        BodyState& s = body.state;
+        s.position = s.position + s.velocity * h + shift[i];
+        const float spin = math::length(s.angular_velocity);
+        if (spin > 1.0e-5f) {
+            s.rotation = math::multiply(
+                math::quat_from_axis_angle(s.angular_velocity / spin, spin * h), s.rotation);
+        }
+    }
+
+    // 8. Sleeping: islands of dynamic bodies at rest.
+    if (sleep_enabled_) {
+        std::vector<int> parent(count);
+        std::iota(parent.begin(), parent.end(), 0);
+        const auto find_root = [&](int x) {
+            while (parent[static_cast<std::size_t>(x)] != x) {
+                parent[static_cast<std::size_t>(x)] = parent[static_cast<std::size_t>(parent[static_cast<std::size_t>(x)])];
+                x = parent[static_cast<std::size_t>(x)];
+            }
+            return x;
+        };
+        for (const Constraint& c : constraints) {
+            if (c.b >= 0 && inv_m[static_cast<std::size_t>(c.a)] > 0.0f &&
+                inv_m[static_cast<std::size_t>(c.b)] > 0.0f) {
+                parent[static_cast<std::size_t>(find_root(c.a))] = find_root(c.b);
+            }
+        }
+        std::vector<char> ready(count, 1);
+        for (std::size_t i = 0; i < count; ++i) {
+            Body& body = bodies_[i];
+            if (!body.alive || !awake_dynamic(body)) continue;
+            const bool slow = math::length_squared(body.state.velocity) < kRestSpeed * kRestSpeed &&
+                              math::length_squared(body.state.angular_velocity) < kRestSpeed * kRestSpeed;
+            body.sleep_timer = slow ? body.sleep_timer + h : 0.0f;
+            if (body.sleep_timer < kSleepTime) {
+                ready[static_cast<std::size_t>(find_root(static_cast<int>(i)))] = 0;
+            }
+        }
+        for (std::size_t i = 0; i < count; ++i) {
+            Body& body = bodies_[i];
+            if (!body.alive || !awake_dynamic(body)) continue;
+            if (ready[static_cast<std::size_t>(find_root(static_cast<int>(i)))]) {
+                body.sleeping = true;
+                body.state.velocity = Vec3{};
+                body.state.angular_velocity = Vec3{};
+            }
+        }
+    }
     ++substeps_;
 }
 

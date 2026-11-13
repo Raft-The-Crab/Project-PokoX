@@ -21,7 +21,8 @@ poko_add_unit_tests(poko_physics_null
 add_library(poko_physics_custom STATIC
     src/custom_world.cpp
     src/custom_step.cpp
-    src/custom_raycast.cpp)
+    src/custom_raycast.cpp
+    src/narrowphase.cpp)
 
 target_include_directories(poko_physics_custom PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -31,4 +32,5 @@ poko_set_impl_label(poko_physics_custom PRODUCTION)
 
 poko_add_unit_tests(poko_physics_custom
     TEST_SOURCES
-        physics_custom_world_test.cpp)
+        physics_custom_world_test.cpp
+        physics_solver_test.cpp)

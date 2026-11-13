@@ -14,6 +14,9 @@ Beta -> Stage 4 Public launch -> Stage 5 Growth.
 
 ### Added
 
+- `poko_physics_custom`: exact sphere/capsule/box narrow phase, sweep-and-prune
+  broadphase, sequential-impulse solver with inertia and friction, island
+  sleeping and oriented raycasts.
 - `poko_replication`: PKXR delta-snapshot replication with interest management,
   server-authoritative input validation and client interpolation over the
   transport seam.

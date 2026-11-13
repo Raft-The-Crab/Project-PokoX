@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "custom_detail.h"
+#include "narrowphase.h"
 
 namespace poko {
 
@@ -24,27 +24,10 @@ bool CustomPhysicsWorld::raycast(const Ray& ray, float max_distance, std::uint32
         }
         float t = 0.0f;
         math::Vec3 normal{};
-        bool found = false;
-        switch (body.shape.kind) {
-        case ShapeKind::Sphere:
-            found = physics::detail::ray_sphere(ray, body.state.position, body.shape.radius, best, t);
-            if (found) {
-                normal = math::normalize((ray.origin + direction * t) - body.state.position);
-            }
-            break;
-        case ShapeKind::Box:
-            found = physics::detail::ray_box(ray, body.state.position, body.shape.half_extents, best, t,
-                                    normal);
-            break;
-        case ShapeKind::Capsule:
-            found = physics::detail::ray_sphere(ray, body.state.position,
-                                       body.shape.radius + body.shape.half_height, best, t);
-            if (found) {
-                normal = math::normalize((ray.origin + direction * t) - body.state.position);
-            }
-            break;
-        }
-        if (!found || t >= best) {
+        if (!physics::detail::ray_shape(
+                ray.origin, direction, body.shape,
+                physics::detail::Pose{body.state.position, body.state.rotation}, best, t, normal) ||
+            t >= best) {
             continue;
         }
         best = t;
