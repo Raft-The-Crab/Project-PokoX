@@ -22,7 +22,9 @@ substep (at most 8 per `step`):
    and oriented box: SAT with face clipping and edge-edge contacts for
    box-box, multi-point manifolds for capsules and boxes, plus a ground plane
    (`set_ground`) giving per-vertex box contacts.
-4. Linear position correction (slop 5 mm, tracked per body so manifolds are
+4. Joint rows (ball, fixed, hinge, slider; limits and motors), contact warm
+   starting (contacts matched to the previous step by proximity), then linear
+   position correction (slop 5 mm, tracked per body so manifolds are
    not over-corrected), then 12 sequential-impulse iterations with angular
    terms (per-shape inertia tensors), two-tangent Coulomb friction and
    restitution above a 1 m/s threshold.
@@ -33,8 +35,15 @@ substep (at most 8 per `step`):
 
 Raycasts are exact against oriented spheres, boxes and capsules.
 
-**Not yet done:** joints/constraints, continuous collision detection for fast
-small bodies, warm starting, triangle-mesh/convex-hull shapes, triggers.
+Rest damping removes residual sway from slow touching bodies, so tall stacks
+settle and sleep. Joints are created with `create_joint` (world-space anchor and
+axis), driven with `set_joint_motor`, read with `joint_position`; jointed bodies
+do not collide unless `collide_connected`, share one sleep island and are
+destroyed with their bodies.
+
+**Not yet done:** continuous collision detection for fast
+small bodies, convex-hull and triangle-mesh shapes, triggers and events, shape
+casts, spring and cone joints.
 
 Public headers live under `include/poko/physics/`; sources under `src/`;
 tests under `tests/`.

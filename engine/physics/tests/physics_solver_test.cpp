@@ -91,6 +91,32 @@ POKO_TEST(box_stack_stays_standing) {
     POKO_CHECK(std::abs(s.position.x) < 0.1f && std::abs(s.position.z) < 0.1f);
 }
 
+POKO_TEST(ten_box_stack_with_offsets_stays_standing_and_sleeps) {
+    World w;
+    BodyHandle top{};
+    for (int i = 0; i < 10; ++i) {
+        const float jitter = (i % 2 == 0 ? 0.02f : -0.02f); // slightly off-centre
+        top = w->create_body(box(jitter, 0.5f + static_cast<float>(i) * 1.0f, 0)).value();
+    }
+    run(w.sim, 8.0f);
+    const auto s = state(w.sim, top);
+    POKO_CHECK(std::abs(s.position.y - 9.5f) < 0.15f);
+    POKO_CHECK(std::abs(s.position.x) < 0.15f);
+    POKO_CHECK(w->sleeping_body_count() >= 9u);
+}
+
+POKO_TEST(heavy_box_rests_on_light_box_without_squashing_it) {
+    World w;
+    auto light = box(0, 0.5f, 0);
+    light.mass = 1.0f;
+    w->create_body(light);
+    auto heavy = box(0, 1.6f, 0);
+    heavy.mass = 50.0f;
+    const auto top = w->create_body(heavy).value();
+    run(w.sim, 4.0f);
+    POKO_CHECK(std::abs(state(w.sim, top).position.y - 1.5f) < 0.08f);
+}
+
 POKO_TEST(box_lands_on_static_platform) {
     World w;
     auto platform = box(0, 1.0f, 0, 1.0f);

@@ -116,6 +116,21 @@ Status CustomPhysicsWorld::destroy_body(BodyHandle body) {
     if (!handle_live(body)) {
         return Status::fail(ErrorCode::NotFound, "body handle is not live");
     }
+    for (std::size_t i = 0; i < joints_.size(); ++i) {
+        Joint& joint = joints_[i];
+        if (!joint.alive || (joint.a != static_cast<int>(body.index) && joint.b != static_cast<int>(body.index))) {
+            continue;
+        }
+        for (const int other : {joint.a, joint.b}) {
+            if (other >= 0 && other != static_cast<int>(body.index)) {
+                bodies_[static_cast<std::size_t>(other)].sleeping = false;
+                bodies_[static_cast<std::size_t>(other)].sleep_timer = 0.0f;
+            }
+        }
+        joint.alive = false;
+        ++joint_generations_[i];
+        joint_free_.push_back(static_cast<HandleIndex>(i));
+    }
     bodies_[body.index].alive = false;
     ++generations_[body.index];
     free_.push_back(body.index);

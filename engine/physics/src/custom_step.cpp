@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <map>
 #include <numeric>
 
+#include "joint_rows.h"
 #include "narrowphase.h"
 
 namespace poko {
@@ -21,11 +23,16 @@ constexpr float kLinearDamping = 0.02f;
 constexpr float kAngularDamping = 0.1f;
 constexpr float kRestSpeed = 0.05f;
 constexpr float kSleepTime = 0.5f;
+constexpr float kMatchDistance = 0.05f;
+constexpr float kRestDamping = 4.0f;
+constexpr float kRestDampSpeed = 0.5f;
 
 struct Constraint {
     int a = -1;
     int b = -1; // -1: immovable ground
     Vec3 n{};
+    Vec3 point{};
+    std::uint64_t key = 0;
     Vec3 ra{};
     Vec3 rb{};
     Vec3 t1{};
@@ -87,6 +94,15 @@ void CustomPhysicsWorld::substep(float h) {
     const auto awake_dynamic = [&](const Body& b) {
         return b.type == BodyType::Dynamic && !b.sleeping;
     };
+    std::vector<std::uint64_t> joined; // body pairs that must not collide
+    for (const Joint& joint : joints_) {
+        if (joint.alive && !joint.collide_connected && joint.b >= 0) {
+            const auto lo = static_cast<std::uint64_t>(std::min(joint.a, joint.b));
+            const auto hi = static_cast<std::uint64_t>(std::max(joint.a, joint.b));
+            joined.push_back(lo << 32 | hi);
+        }
+    }
+    std::sort(joined.begin(), joined.end());
     std::vector<Pair> pairs;
     for (std::size_t i = 0; i < entries.size(); ++i) {
         for (std::size_t j = i + 1; j < entries.size() && entries[j].lo.x <= entries[i].hi.x; ++j) {
@@ -95,6 +111,10 @@ void CustomPhysicsWorld::substep(float h) {
             if (e.lo.y > f.hi.y || f.lo.y > e.hi.y || e.lo.z > f.hi.z || f.lo.z > e.hi.z) continue;
             const int lo = std::min(e.index, f.index);
             const int hi = std::max(e.index, f.index);
+            if (std::binary_search(joined.begin(), joined.end(),
+                                   static_cast<std::uint64_t>(lo) << 32 | static_cast<std::uint64_t>(hi))) {
+                continue;
+            }
             const Body& ba = bodies_[static_cast<std::size_t>(lo)];
             const Body& bb = bodies_[static_cast<std::size_t>(hi)];
             if (!awake_dynamic(ba) && !awake_dynamic(bb)) continue;
@@ -128,6 +148,24 @@ void CustomPhysicsWorld::substep(float h) {
             bb.sleep_timer = 0.0f;
         }
     }
+    // A joint keeps its bodies in one island: waking one wakes the chain.
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const Joint& joint : joints_) {
+            if (!joint.alive || joint.b < 0) continue;
+            Body& ba = bodies_[static_cast<std::size_t>(joint.a)];
+            Body& bb = bodies_[static_cast<std::size_t>(joint.b)];
+            if (ba.sleeping && awake_dynamic(bb)) {
+                ba.sleeping = false;
+                ba.sleep_timer = 0.0f;
+                changed = true;
+            } else if (bb.sleeping && awake_dynamic(ba)) {
+                bb.sleeping = false;
+                bb.sleep_timer = 0.0f;
+                changed = true;
+            }
+        }
+    }
 
     std::vector<float> inv_m(count, 0.0f);
     for (std::size_t i = 0; i < count; ++i) {
@@ -152,6 +190,8 @@ void CustomPhysicsWorld::substep(float h) {
             c.a = a;
             c.b = b;
             c.n = cp.normal;
+            c.point = cp.point;
+            c.key = (static_cast<std::uint64_t>(a + 1) << 32) | static_cast<std::uint64_t>(b + 1);
             c.depth = cp.depth;
             c.ra = cp.point - bodies_[static_cast<std::size_t>(a)].state.position;
             c.rb = b >= 0 ? cp.point - bodies_[static_cast<std::size_t>(b)].state.position : Vec3{};
@@ -239,7 +279,72 @@ void CustomPhysicsWorld::substep(float h) {
         const float vn = math::dot(velocity_at(c.b, c.rb) - velocity_at(c.a, c.ra), c.n);
         c.bounce = vn < -kRestitutionThreshold ? -c.bounce * vn : 0.0f;
     }
+    // Joint rows: geometry from the current pose, impulses from the last step.
+    std::vector<JointRow> jrows;
+    build_joint_rows(h, inv_m, jrows);
+    const auto body_velocity = [&](int i) {
+        return i < 0 ? Vec3{} : bodies_[static_cast<std::size_t>(i)].state.velocity;
+    };
+    const auto body_spin = [&](int i) {
+        return i < 0 ? Vec3{} : bodies_[static_cast<std::size_t>(i)].state.angular_velocity;
+    };
+    const auto row_inv_mass = [&](int i) { return i < 0 ? 0.0f : inv_m[static_cast<std::size_t>(i)]; };
+    const auto row_inertia = [&](int i, const Vec3& v) { return i < 0 ? Vec3{} : inv_inertia_mul(i, v); };
+    const auto apply_row = [&](const JointRow& r, float lambda) {
+        if (r.a >= 0) {
+            BodyState& s = bodies_[static_cast<std::size_t>(r.a)].state;
+            s.velocity = s.velocity - r.lin * (row_inv_mass(r.a) * lambda);
+            s.angular_velocity = s.angular_velocity - row_inertia(r.a, r.ang_a * lambda);
+        }
+        if (r.b >= 0) {
+            BodyState& s = bodies_[static_cast<std::size_t>(r.b)].state;
+            s.velocity = s.velocity + r.lin * (row_inv_mass(r.b) * lambda);
+            s.angular_velocity = s.angular_velocity + row_inertia(r.b, r.ang_b * lambda);
+        }
+    };
+    for (JointRow& r : jrows) {
+        float k = (row_inv_mass(r.a) + row_inv_mass(r.b)) * math::dot(r.lin, r.lin) +
+                  math::dot(row_inertia(r.a, r.ang_a), r.ang_a) +
+                  math::dot(row_inertia(r.b, r.ang_b), r.ang_b);
+        r.mass = k > 1.0e-9f ? 1.0f / k : 0.0f;
+        apply_row(r, r.impulse); // warm start
+    }
+
+    // Contact warm starting: match each contact to last step's nearest one.
+    std::map<std::uint64_t, std::vector<char>> claimed;
+    for (Constraint& c : constraints) {
+        const auto cached = contact_cache_.find(c.key);
+        if (cached == contact_cache_.end()) continue;
+        auto& taken = claimed[c.key];
+        taken.resize(cached->second.size(), 0);
+        int best = -1;
+        float best_d2 = kMatchDistance * kMatchDistance;
+        for (std::size_t i = 0; i < cached->second.size(); ++i) {
+            const float d2 = math::length_squared(cached->second[i].point - c.point);
+            if (!taken[i] && d2 < best_d2) {
+                best_d2 = d2;
+                best = static_cast<int>(i);
+            }
+        }
+        if (best < 0) continue;
+        taken[static_cast<std::size_t>(best)] = 1;
+        const auto& old = cached->second[static_cast<std::size_t>(best)];
+        c.jn = old.normal_impulse;
+        c.jt1 = math::dot(old.friction_impulse, c.t1);
+        c.jt2 = math::dot(old.friction_impulse, c.t2);
+    }
+    for (const Constraint& c : constraints) {
+        apply(c, c.n * c.jn + c.t1 * c.jt1 + c.t2 * c.jt2);
+    }
+
     for (int iter = 0; iter < kVelocityIterations; ++iter) {
+        for (JointRow& r : jrows) {
+            const float jv = math::dot(r.lin, body_velocity(r.b) - body_velocity(r.a)) +
+                             math::dot(r.ang_b, body_spin(r.b)) - math::dot(r.ang_a, body_spin(r.a));
+            const float old = r.impulse;
+            r.impulse = math::clamp(old + r.mass * (r.bias - jv), r.lo, r.hi);
+            apply_row(r, r.impulse - old);
+        }
         for (Constraint& c : constraints) {
             const Vec3 rel = velocity_at(c.b, c.rb) - velocity_at(c.a, c.ra);
             // Friction, bounded by the Coulomb cone of the current normal impulse.
@@ -259,6 +364,35 @@ void CustomPhysicsWorld::substep(float h) {
             c.jn = std::max(0.0f, old + dn);
             apply(c, c.n * (c.jn - old));
         }
+    }
+
+    // Rest damping: slow bodies in contact shed residual sway so stacks settle
+    // and can sleep instead of creeping indefinitely.
+    {
+        std::vector<char> touching(count, 0);
+        for (const Constraint& c : constraints) {
+            touching[static_cast<std::size_t>(c.a)] = 1;
+            if (c.b >= 0) touching[static_cast<std::size_t>(c.b)] = 1;
+        }
+        const float factor = 1.0f / (1.0f + kRestDamping * h);
+        for (std::size_t i = 0; i < count; ++i) {
+            Body& body = bodies_[i];
+            if (!touching[i] || !body.alive || !awake_dynamic(body)) continue;
+            BodyState& s = body.state;
+            if (math::length_squared(s.velocity) < kRestDampSpeed * kRestDampSpeed &&
+                math::length_squared(s.angular_velocity) < kRestDampSpeed * kRestDampSpeed) {
+                s.velocity = s.velocity * factor;
+                s.angular_velocity = s.angular_velocity * factor;
+            }
+        }
+    }
+
+    for (const JointRow& r : jrows) {
+        joints_[static_cast<std::size_t>(r.joint)].impulses[r.slot] = r.impulse;
+    }
+    contact_cache_.clear();
+    for (const Constraint& c : constraints) {
+        contact_cache_[c.key].push_back({c.point, c.jn, c.t1 * c.jt1 + c.t2 * c.jt2});
     }
 
     // 7. Integrate positions and orientation.
@@ -289,6 +423,12 @@ void CustomPhysicsWorld::substep(float h) {
             if (c.b >= 0 && inv_m[static_cast<std::size_t>(c.a)] > 0.0f &&
                 inv_m[static_cast<std::size_t>(c.b)] > 0.0f) {
                 parent[static_cast<std::size_t>(find_root(c.a))] = find_root(c.b);
+            }
+        }
+        for (const Joint& joint : joints_) {
+            if (joint.alive && joint.b >= 0 && inv_m[static_cast<std::size_t>(joint.a)] > 0.0f &&
+                inv_m[static_cast<std::size_t>(joint.b)] > 0.0f) {
+                parent[static_cast<std::size_t>(find_root(joint.a))] = find_root(joint.b);
             }
         }
         std::vector<char> ready(count, 1);
