@@ -8,14 +8,25 @@
 
 namespace poko {
 
+namespace physics::detail {
+struct ContactConstraint;
+}
+
 // PRODUCTION custom rigid-body world (systemplan/06, systemplan/29 "custom
-// physics"). Deterministic fixed-substep simulation: semi-implicit Euler with
-// angular integration, a static ground plane, impulse-based collision response
-// with restitution/friction, layer/mask filtering, and analytic raycasts.
-//
-// Narrow phase uses conservative bounding spheres (box = circumscribed sphere,
-// capsule = radius + half_height); exact polyhedral contact is future work.
-// Raycasts are analytic against sphere, AABB and capsule bounds.
+// physics"). Deterministic fixed-substep simulation:
+//   * shapes: sphere, oriented box, capsule (local Y axis), with rotation;
+//   * broadphase: sweep-and-prune on the X axis over world AABBs;
+//   * narrow phase: SAT box-box manifolds, segment-based capsules, plus a
+//     static ground plane;
+//   * solver: sequential impulses (normal + two friction axes, accumulated
+//     and clamped) using a per-shape inertia tensor, then a short positional
+//     projection pass against residual penetration;
+//   * sleeping: bodies at rest for 0.5 s stop simulating until touched by a
+//     moving body, moved with set_body_state, or a body is destroyed;
+//   * Kinematic bodies integrate their velocity, are never pushed, and push
+//     dynamic bodies.
+// Capsule inertia is approximated by the capsule's bounding box. Raycasts are
+// exact against rotated boxes, capsules and spheres.
 //
 // Thread-safety contract: synchronised; any thread may call any method.
 class CustomPhysicsWorld final : public api::IPhysicsWorld {
@@ -37,6 +48,8 @@ public:
     bool ground_enabled() const noexcept;
     std::uint32_t contact_count() const noexcept;
     std::uint32_t substep_count() const noexcept;
+    std::uint32_t sleeping_count() const noexcept;
+    bool is_sleeping(BodyHandle body) const noexcept;
 
 private:
     struct Body {
@@ -49,14 +62,22 @@ private:
         float restitution = 0.0f;
         std::uint32_t collision_layer = 1;
         std::uint32_t collision_mask = 0xFFFFFFFFu;
+        float inv_mass = 0.0f;
+        math::Vec3 inv_inertia{}; // diagonal of the inverse local inertia tensor
+        bool sleeping = false;
+        float sleep_time = 0.0f;
     };
 
     bool handle_live(BodyHandle handle) const noexcept; // caller holds mutex_
     Body* find(BodyHandle handle) noexcept;             // caller holds mutex_
     const Body* find(BodyHandle handle) const noexcept; // caller holds mutex_
+    void wake(Body& body) noexcept;                     // caller holds mutex_
+    bool moving(const Body& body) const noexcept;       // caller holds mutex_
     void substep(float h);                              // caller holds mutex_
-    void resolve_ground();                              // caller holds mutex_
-    void resolve_contacts();                            // caller holds mutex_
+    void build_contacts(std::vector<physics::detail::ContactConstraint>& out);
+    void solve_contacts(std::vector<physics::detail::ContactConstraint>& contacts);
+    void project_positions();
+    void update_sleep(float h);
 
     mutable std::mutex mutex_;
     bool initialized_ = false;

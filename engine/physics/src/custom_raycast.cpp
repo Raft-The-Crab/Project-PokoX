@@ -25,24 +25,34 @@ bool CustomPhysicsWorld::raycast(const Ray& ray, float max_distance, std::uint32
         float t = 0.0f;
         math::Vec3 normal{};
         bool found = false;
+        const math::Vec3& position = body.state.position;
         switch (body.shape.kind) {
         case ShapeKind::Sphere:
-            found = physics::detail::ray_sphere(ray, body.state.position, body.shape.radius, best, t);
+            found = physics::detail::ray_sphere(ray.origin, direction, position, body.shape.radius,
+                                                best, t);
             if (found) {
-                normal = math::normalize((ray.origin + direction * t) - body.state.position);
+                normal = math::normalize((ray.origin + direction * t) - position);
             }
             break;
-        case ShapeKind::Box:
-            found = physics::detail::ray_box(ray, body.state.position, body.shape.half_extents, best, t,
-                                    normal);
-            break;
-        case ShapeKind::Capsule:
-            found = physics::detail::ray_sphere(ray, body.state.position,
-                                       body.shape.radius + body.shape.half_height, best, t);
+        case ShapeKind::Box: {
+            const math::Quat inverse = math::conjugate(body.state.rotation);
+            math::Vec3 local_normal{};
+            found = physics::detail::ray_box_local(math::rotate(inverse, ray.origin - position),
+                                                   math::rotate(inverse, direction),
+                                                   body.shape.half_extents, best, t, local_normal);
             if (found) {
-                normal = math::normalize((ray.origin + direction * t) - body.state.position);
+                normal = math::rotate(body.state.rotation, local_normal);
             }
             break;
+        }
+        case ShapeKind::Capsule: {
+            const math::Vec3 axis =
+                math::rotate(body.state.rotation, {0.0f, 1.0f, 0.0f}) * body.shape.half_height;
+            found =
+                physics::detail::ray_capsule(ray.origin, direction, position - axis,
+                                             position + axis, body.shape.radius, best, t, normal);
+            break;
+        }
         }
         if (!found || t >= best) {
             continue;

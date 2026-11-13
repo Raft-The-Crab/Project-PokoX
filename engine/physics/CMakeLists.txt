@@ -20,6 +20,7 @@ poko_add_unit_tests(poko_physics_null
 # response, ground plane and analytic raycasts. Standard library only.
 add_library(poko_physics_custom STATIC
     src/custom_world.cpp
+    src/custom_collide.cpp
     src/custom_step.cpp
     src/custom_raycast.cpp)
 

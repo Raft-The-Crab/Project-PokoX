@@ -4,6 +4,33 @@
 #include <cstddef>
 
 namespace poko {
+namespace {
+
+// Diagonal of the inverse local inertia tensor. Capsules use their bounding box.
+math::Vec3 inverse_inertia(const ShapeDesc& shape, float mass) noexcept {
+    float ix = 0.0f;
+    float iy = 0.0f;
+    float iz = 0.0f;
+    auto box = [&](float hx, float hy, float hz) {
+        ix = mass / 3.0f * (hy * hy + hz * hz);
+        iy = mass / 3.0f * (hx * hx + hz * hz);
+        iz = mass / 3.0f * (hx * hx + hy * hy);
+    };
+    switch (shape.kind) {
+    case ShapeKind::Sphere:
+        ix = iy = iz = 0.4f * mass * shape.radius * shape.radius;
+        break;
+    case ShapeKind::Box:
+        box(shape.half_extents.x, shape.half_extents.y, shape.half_extents.z);
+        break;
+    case ShapeKind::Capsule:
+        box(shape.radius, shape.half_height + shape.radius, shape.radius);
+        break;
+    }
+    return {1.0f / ix, 1.0f / iy, 1.0f / iz};
+}
+
+} // namespace
 
 bool CustomPhysicsWorld::initialize(const PhysicsWorldDesc& desc) noexcept {
     std::lock_guard<std::mutex> guard(mutex_);
@@ -70,6 +97,10 @@ Result<BodyHandle> CustomPhysicsWorld::create_body(const BodyDesc& desc) {
     body.restitution = desc.restitution;
     body.collision_layer = desc.collision_layer;
     body.collision_mask = desc.collision_mask;
+    if (desc.type == BodyType::Dynamic) {
+        body.inv_mass = 1.0f / desc.mass;
+        body.inv_inertia = inverse_inertia(desc.shape, desc.mass);
+    }
     return Result<BodyHandle>::success(make_handle(index, generations_[index]));
 }
 
@@ -79,6 +110,10 @@ Status CustomPhysicsWorld::destroy_body(BodyHandle body) {
         return Status::fail(ErrorCode::NotFound, "body handle is not live");
     }
     bodies_[body.index].alive = false;
+    // Anything resting on the removed body may have lost its support.
+    for (auto& other : bodies_) {
+        wake(other);
+    }
     ++generations_[body.index];
     free_.push_back(body.index);
     return Status::success();
@@ -93,6 +128,7 @@ Status CustomPhysicsWorld::set_body_state(BodyHandle body, const BodyState& stat
         return Status::fail(ErrorCode::NotFound, "body handle is not live");
     }
     bodies_[body.index].state = state;
+    wake(bodies_[body.index]);
     return Status::success();
 }
 
@@ -130,6 +166,27 @@ bool CustomPhysicsWorld::ground_enabled() const noexcept {
 std::uint32_t CustomPhysicsWorld::contact_count() const noexcept {
     std::lock_guard<std::mutex> guard(mutex_);
     return contacts_;
+}
+
+std::uint32_t CustomPhysicsWorld::sleeping_count() const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    std::uint32_t count = 0;
+    for (const auto& body : bodies_) {
+        if (body.alive && body.sleeping) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+bool CustomPhysicsWorld::is_sleeping(BodyHandle body) const noexcept {
+    std::lock_guard<std::mutex> guard(mutex_);
+    return handle_live(body) && bodies_[body.index].sleeping;
+}
+
+void CustomPhysicsWorld::wake(Body& body) noexcept {
+    body.sleeping = false;
+    body.sleep_time = 0.0f;
 }
 
 std::uint32_t CustomPhysicsWorld::substep_count() const noexcept {
